@@ -1,0 +1,210 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>ทดสอบการเชื่อมต่อ Product Q&amp;A</title>
+<style>
+  body { font-family: sans-serif; margin: 0; padding: 16px; background: #f5f6f8; color: #1d2330; line-height: 1.5; }
+  main { max-width: 560px; margin: 0 auto; }
+  h1 { font-size: 1.25rem; margin: 0 0 4px; }
+  p.sub { margin: 0 0 16px; color: #555; font-size: 0.95rem; }
+  .check { background: #fff; border: 1px solid #d5d9e0; border-radius: 8px; padding: 12px; margin-bottom: 10px; }
+  .check .name { font-weight: bold; }
+  .check .line { margin-top: 4px; font-size: 1rem; }
+  .wait { color: #666; }
+  .pass { color: #0a7a2f; font-weight: bold; }
+  .fail { color: #b3261e; font-weight: bold; }
+  #summary { background: #fff; border: 2px solid #d5d9e0; border-radius: 8px; padding: 12px; margin: 14px 0; font-weight: bold; }
+  label { display: block; margin: 12px 0 4px; font-weight: bold; }
+  input[type=text] { width: 100%; box-sizing: border-box; padding: 12px; font-size: 1.1rem; border: 1px solid #aab; border-radius: 8px; text-transform: uppercase; }
+  button { width: 100%; margin-top: 12px; padding: 14px; font-size: 1.1rem; border: 0; border-radius: 8px; background: #1a5fd0; color: #fff; }
+  button:active { background: #1448a0; }
+  #copyMsg { margin-top: 8px; min-height: 1.5em; }
+  textarea#fallback { display: none; width: 100%; box-sizing: border-box; height: 180px; margin-top: 8px; font-size: 0.9rem; }
+  p.note { color: #555; font-size: 0.85rem; margin-top: 16px; }
+</style>
+</head>
+<body>
+<main>
+  <h1>ทดสอบการเชื่อมต่อ Product Q&amp;A</h1>
+  <p class="sub">รอสักครู่ ระบบกำลังตรวจสอบว่าเครือข่ายของสาขาเข้าใช้งานได้หรือไม่ (ไม่เกิน 10 วินาที)</p>
+
+  <div class="check">
+    <div class="name">1. เปิดหน้านี้ (เว็บ GitHub Pages)</div>
+    <div class="line" id="r1"><span class="wait">กำลังตรวจสอบ...</span></div>
+  </div>
+  <div class="check">
+    <div class="name">2. ติดต่อเซิร์ฟเวอร์ (Supabase)</div>
+    <div class="line" id="r2"><span class="wait">กำลังตรวจสอบ...</span></div>
+  </div>
+  <div class="check">
+    <div class="name">3. โหลดรูปภาพทดสอบ</div>
+    <div class="line" id="r3"><span class="wait">กำลังตรวจสอบ...</span></div>
+  </div>
+
+  <div id="summary">กำลังสรุปผล...</div>
+
+  <label for="branch">รหัสสาขา (เช่น IC008)</label>
+  <input type="text" id="branch" maxlength="10" autocomplete="off" placeholder="IC008">
+
+  <button type="button" id="copyBtn">คัดลอกผลการทดสอบ</button>
+  <div id="copyMsg"></div>
+  <textarea id="fallback" readonly></textarea>
+
+  <p class="note">หน้านี้ส่งคำขอทดสอบเพียง 2 รายการ (เซิร์ฟเวอร์และรูปภาพ) ไม่ส่งข้อมูลอื่นไปที่ใดเลย ผลการทดสอบจะถูกคัดลอกไว้ในเครื่อง เพื่อให้นำไปวางส่งให้ผู้ดูแลเอง</p>
+</main>
+
+<script>
+(function () {
+  var SUPABASE_URL = 'https://zuyqwkjvjuwykrdhzhwq.supabase.co';
+  var TEST_IMAGE_URL = 'https://zuyqwkjvjuwykrdhzhwq.supabase.co/storage/v1/object/public/catalog-pages/test/test.jpg';
+  var TIMEOUT_MS = 10000;
+
+  // results: null = pending, true = pass, false = fail
+  var results = { page: true, api: null, image: null };
+  var details = { page: 'เปิดหน้านี้ได้', api: '', image: '' };
+
+  function setLine(id, ok, text) {
+    var el = document.getElementById(id);
+    el.textContent = '';
+    var span = document.createElement('span');
+    span.className = ok ? 'pass' : 'fail';
+    span.textContent = (ok ? 'ผ่าน: ' : 'ไม่ผ่าน: ') + text;
+    el.appendChild(span);
+  }
+
+  function summarize() {
+    var box = document.getElementById('summary');
+    if (results.api === null || results.image === null) {
+      box.textContent = 'กำลังสรุปผล...';
+      return;
+    }
+    var allOk = results.page && results.api && results.image;
+    box.textContent = allOk
+      ? 'สรุป: ผ่านทุกข้อ เครือข่ายสาขานี้ใช้งาน Product Q&A ได้'
+      : 'สรุป: มีบางข้อไม่ผ่าน เครือข่ายสาขานี้อาจใช้งาน Product Q&A ไม่ได้ กรุณาคัดลอกผลส่งให้ผู้ดูแล';
+    box.className = allOk ? 'pass' : 'fail';
+  }
+
+  // Check 1: the page itself loaded.
+  setLine('r1', true, details.page);
+
+  // Check 2: any HTTP response from the ping endpoint counts as reachable.
+  (function () {
+    var done = false;
+    var controller = typeof AbortController !== 'undefined' ? new AbortController() : null;
+    var timer = setTimeout(function () {
+      if (done) return;
+      done = true;
+      results.api = false;
+      details.api = 'ไม่ตอบกลับภายใน 10 วินาที (ถูกบล็อก)';
+      setLine('r2', false, details.api);
+      if (controller) controller.abort();
+      summarize();
+    }, TIMEOUT_MS);
+    var opts = { method: 'GET', cache: 'no-store' };
+    if (controller) opts.signal = controller.signal;
+    fetch(SUPABASE_URL + '/functions/v1/ping', opts).then(function (resp) {
+      if (done) return;
+      done = true;
+      clearTimeout(timer);
+      results.api = true;
+      details.api = 'เข้าถึงเซิร์ฟเวอร์ได้ (HTTP ' + resp.status + ')';
+      setLine('r2', true, details.api);
+      summarize();
+    }, function () {
+      if (done) return;
+      done = true;
+      clearTimeout(timer);
+      results.api = false;
+      details.api = 'เชื่อมต่อเซิร์ฟเวอร์ไม่ได้ (ถูกบล็อก)';
+      setLine('r2', false, details.api);
+      summarize();
+    });
+  })();
+
+  // Check 3: image load with onload/onerror and timeout.
+  (function () {
+    var done = false;
+    var img = new Image();
+    var timer = setTimeout(function () {
+      if (done) return;
+      done = true;
+      results.image = false;
+      details.image = 'โหลดรูปไม่เสร็จภายใน 10 วินาที (ถูกบล็อก)';
+      setLine('r3', false, details.image);
+      img.onload = img.onerror = null;
+      summarize();
+    }, TIMEOUT_MS);
+    img.onload = function () {
+      if (done) return;
+      done = true;
+      clearTimeout(timer);
+      results.image = true;
+      details.image = 'โหลดรูปภาพได้';
+      setLine('r3', true, details.image);
+      summarize();
+    };
+    img.onerror = function () {
+      if (done) return;
+      done = true;
+      clearTimeout(timer);
+      results.image = false;
+      details.image = 'โหลดรูปภาพไม่ได้ (ถูกบล็อก)';
+      setLine('r3', false, details.image);
+      summarize();
+    };
+    img.src = TEST_IMAGE_URL + '?t=' + Date.now();
+  })();
+
+  function label(v) {
+    return v === null ? 'ยังไม่เสร็จ' : (v ? 'ผ่าน' : 'ไม่ผ่าน');
+  }
+
+  function buildReport() {
+    var code = document.getElementById('branch').value.trim().toUpperCase() || '(ไม่ได้กรอก)';
+    return [
+      'รายงานทดสอบการเชื่อมต่อ Product Q&A',
+      'รหัสสาขา: ' + code,
+      '1. เปิดหน้าเว็บ: ' + label(results.page) + ' - ' + details.page,
+      '2. เซิร์ฟเวอร์: ' + label(results.api) + ' - ' + (details.api || 'กำลังตรวจสอบ'),
+      '3. รูปภาพ: ' + label(results.image) + ' - ' + (details.image || 'กำลังตรวจสอบ'),
+      'userAgent: ' + navigator.userAgent,
+      'เวลาในเครื่อง: ' + new Date().toString()
+    ].join('\n');
+  }
+
+  function showFallback(text) {
+    var ta = document.getElementById('fallback');
+    ta.style.display = 'block';
+    ta.value = text;
+    ta.focus();
+    ta.select();
+  }
+
+  document.getElementById('copyBtn').addEventListener('click', function () {
+    var text = buildReport();
+    var msg = document.getElementById('copyMsg');
+    function ok() { msg.className = 'pass'; msg.textContent = 'คัดลอกแล้ว นำไปวางส่งให้ผู้ดูแลได้เลย'; }
+    function manual() {
+      msg.className = 'fail';
+      msg.textContent = 'คัดลอกอัตโนมัติไม่ได้ กรุณากดค้างที่ข้อความด้านล่างแล้วเลือกคัดลอก';
+      showFallback(text);
+    }
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(text).then(ok, function () { tryLegacy(); });
+    } else {
+      tryLegacy();
+    }
+    function tryLegacy() {
+      showFallback(text);
+      var copied = false;
+      try { copied = document.execCommand('copy'); } catch (e) { copied = false; }
+      if (copied) { ok(); } else { manual(); }
+    }
+  });
+})();
+</script>
+</body>
+</html>

@@ -1,0 +1,327 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>ถามข้อมูลสินค้า</title>
+<style>
+  * { box-sizing: border-box; }
+  body { font-family: "Leelawadee UI", "Leelawadee", Tahoma, sans-serif; margin: 0; padding: 16px; background: #f5f6f8; color: #1d2330; line-height: 1.5; }
+  main { max-width: 640px; margin: 0 auto; }
+  h1 { font-size: 1.3rem; margin: 0 0 4px; }
+  #who { margin: 0 0 14px; color: #555; font-size: 0.95rem; min-height: 1.4em; }
+  #msg { background: #fff; border: 1px solid #d5d9e0; border-radius: 8px; padding: 12px; margin-bottom: 12px; }
+  #msg.error { border-color: #b3261e; color: #b3261e; font-weight: bold; }
+  #searchBox { display: flex; gap: 8px; margin-bottom: 14px; }
+  #q { flex: 1; min-width: 0; padding: 12px; font-size: 1.1rem; border: 1px solid #aab; border-radius: 8px; font-family: inherit; }
+  #goBtn { padding: 12px 18px; font-size: 1.1rem; border: 0; border-radius: 8px; background: #1a5fd0; color: #fff; font-family: inherit; cursor: pointer; }
+  #goBtn:disabled { background: #8a98b3; cursor: default; }
+  #status { color: #555; margin-bottom: 10px; min-height: 1.4em; }
+  .card { background: #fff; border: 1px solid #d5d9e0; border-radius: 8px; padding: 12px; margin-bottom: 10px; }
+  .code { font-family: Consolas, "Courier New", monospace; font-size: 1.6rem; font-weight: bold; letter-spacing: 1px; }
+  .name { font-size: 1.05rem; font-weight: bold; margin: 2px 0 6px; }
+  .detail { font-size: 0.95rem; color: #333; }
+  .dup { margin-top: 8px; padding: 6px 8px; background: #fff4d6; border: 1px solid #e0b84a; border-radius: 6px; color: #6b4a00; font-size: 0.9rem; }
+  .cite { display: block; width: 100%; margin-top: 10px; padding: 10px; text-align: left; font-size: 0.95rem; border: 1px solid #1a5fd0; border-radius: 8px; background: #eef3fc; color: #1a5fd0; font-family: inherit; cursor: pointer; }
+  .none { background: #fff; border: 1px solid #d5d9e0; border-radius: 8px; padding: 14px; }
+  .none .hint { color: #555; font-size: 0.95rem; margin-top: 4px; }
+  #overlay { display: none; position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: #11151d; z-index: 10; flex-direction: column; }
+  #overlay.open { display: flex; }
+  #ovBar { display: flex; align-items: center; gap: 8px; padding: 8px 12px; background: #1d2330; color: #fff; }
+  #ovText { flex: 1; font-size: 0.95rem; }
+  #ovClose { padding: 8px 14px; font-size: 1rem; border: 0; border-radius: 8px; background: #fff; color: #1d2330; font-family: inherit; cursor: pointer; }
+  #ovBody { flex: 1; overflow: auto; text-align: center; }
+  #ovImg { width: 100%; height: auto; display: block; }
+  #ovErr { color: #fff; padding: 24px 12px; }
+  [hidden] { display: none !important; }
+</style>
+</head>
+<body>
+<main>
+  <h1>ถามข้อมูลสินค้า</h1>
+  <p id="who"></p>
+  <div id="msg" hidden></div>
+  <div id="searchBox" hidden>
+    <input type="text" id="q" maxlength="200" autocomplete="off" placeholder="พิมพ์ชื่อสินค้า หรือรหัส 7 หลัก">
+    <button type="button" id="goBtn">ค้นหา</button>
+  </div>
+  <div id="status"></div>
+  <div id="results"></div>
+</main>
+
+<div id="overlay" role="dialog" aria-modal="true">
+  <div id="ovBar">
+    <div id="ovText"></div>
+    <button type="button" id="ovClose">ปิด</button>
+  </div>
+  <div id="ovBody">
+    <img id="ovImg" alt="หน้าเอกสารสินค้า">
+    <div id="ovErr" hidden>โหลดรูปหน้าเอกสารไม่ได้</div>
+  </div>
+</div>
+
+<script>
+(function () {
+  var SUPABASE_URL = 'https://zuyqwkjvjuwykrdhzhwq.supabase.co';
+  var TIMEOUT_MS = 15000;
+  var STORE_KEY = 'pqa.session';
+
+  // BEGIN PURE
+  function reasonMessage(reason) {
+    if (reason === 'expired') return 'ลิงก์หมดอายุ กรุณากดเมนู ถามข้อมูลสินค้า ใน Job Tracker อีกครั้ง';
+    if (reason === 'reused') return 'ลิงก์นี้ถูกใช้ไปแล้ว กรุณากดเมนูใน Job Tracker อีกครั้ง';
+    if (reason === 'malformed' || reason === 'bad_signature') return 'ลิงก์ไม่ถูกต้อง กรุณากดเมนูใน Job Tracker อีกครั้ง';
+    return 'ติดต่อเซิร์ฟเวอร์ไม่ได้ ลองใหม่อีกครั้ง';
+  }
+  function splitDetails(text) {
+    if (typeof text !== 'string') return [];
+    var out = [];
+    var parts = text.split(' | ');
+    for (var i = 0; i < parts.length; i++) {
+      var p = parts[i].trim();
+      if (p) out.push(p);
+    }
+    return out;
+  }
+  function isSessionValid(stored, now) {
+    if (!stored || typeof stored !== 'object') return false;
+    if (typeof stored.session !== 'string' || !stored.session) return false;
+    if (typeof stored.expiresAt !== 'number') return false;
+    return stored.expiresAt > now;
+  }
+  function getSsoParam(search) {
+    var v = new URLSearchParams(search).get('sso');
+    return v ? v : null;
+  }
+  function cleanUrl(pathname, search, hash) {
+    var params = new URLSearchParams(search);
+    params.delete('sso');
+    var rest = params.toString();
+    return pathname + (rest ? '?' + rest : '') + (hash || '');
+  }
+  function isTrustedPageUrl(url, baseUrl) {
+    if (typeof url !== 'string') return false;
+    return url.indexOf(baseUrl + '/storage/v1/object/public/catalog-pages/') === 0;
+  }
+  function citationLine(c) {
+    return 'ที่มา: ' + c.documentTitle + ' หน้า ' + c.page;
+  }
+  // END PURE
+
+  var els = {
+    who: document.getElementById('who'),
+    msg: document.getElementById('msg'),
+    box: document.getElementById('searchBox'),
+    q: document.getElementById('q'),
+    go: document.getElementById('goBtn'),
+    status: document.getElementById('status'),
+    results: document.getElementById('results'),
+    overlay: document.getElementById('overlay'),
+    ovText: document.getElementById('ovText'),
+    ovClose: document.getElementById('ovClose'),
+    ovImg: document.getElementById('ovImg'),
+    ovErr: document.getElementById('ovErr')
+  };
+  var current = null;
+  var busy = false;
+  var lastFocus = null;
+
+  function showMessage(text, isError) {
+    els.msg.hidden = false;
+    els.msg.className = isError ? 'error' : '';
+    els.msg.textContent = text;
+  }
+  function hideMessage() { els.msg.hidden = true; els.msg.textContent = ''; }
+
+  function loadStored() {
+    try {
+      var raw = sessionStorage.getItem(STORE_KEY);
+      return raw ? JSON.parse(raw) : null;
+    } catch (e) { return null; }
+  }
+  function saveStored(obj) {
+    try { sessionStorage.setItem(STORE_KEY, JSON.stringify(obj)); } catch (e) { /* storage blocked */ }
+  }
+  function clearStored() {
+    try { sessionStorage.removeItem(STORE_KEY); } catch (e) { /* storage blocked */ }
+  }
+
+  function postJson(path, body, headers) {
+    var controller = new AbortController();
+    var timer = setTimeout(function () { controller.abort(); }, TIMEOUT_MS);
+    var h = { 'content-type': 'application/json' };
+    if (headers) { for (var k in headers) { h[k] = headers[k]; } }
+    return fetch(SUPABASE_URL + path, {
+      method: 'POST',
+      headers: h,
+      body: JSON.stringify(body),
+      cache: 'no-store',
+      signal: controller.signal
+    }).then(function (resp) {
+      clearTimeout(timer);
+      return resp.json().then(function (data) {
+        return { status: resp.status, data: data };
+      }, function () {
+        return { status: resp.status, data: null };
+      });
+    }, function () {
+      clearTimeout(timer);
+      return { status: 0, data: null };
+    });
+  }
+
+  function showSearch(sess) {
+    current = sess;
+    hideMessage();
+    els.who.textContent = (sess.staff.n || '') + ' | ' + (sess.staff.un || '');
+    els.box.hidden = false;
+    els.q.focus();
+  }
+  function showNoSearch(text) {
+    current = null;
+    els.box.hidden = true;
+    els.who.textContent = '';
+    els.results.textContent = '';
+    els.status.textContent = '';
+    showMessage(text, true);
+  }
+
+  function startSession() {
+    var sso = getSsoParam(window.location.search);
+    if (sso !== null) {
+      try {
+        history.replaceState(null, '', cleanUrl(window.location.pathname, window.location.search, window.location.hash));
+      } catch (e) { /* ignore */ }
+      showMessage('กำลังเข้าสู่ระบบ...', false);
+      postJson('/functions/v1/session', { link: sso }).then(function (r) {
+        if (r.status === 200 && r.data && typeof r.data.session === 'string') {
+          var sess = {
+            session: r.data.session,
+            staff: r.data.staff || {},
+            isAdmin: !!r.data.isAdmin,
+            expiresAt: r.data.expiresAt
+          };
+          saveStored(sess);
+          showSearch(sess);
+        } else if (r.status === 401) {
+          showNoSearch(reasonMessage(r.data && r.data.error));
+        } else {
+          showNoSearch(reasonMessage('network'));
+        }
+      });
+      return;
+    }
+    var stored = loadStored();
+    if (isSessionValid(stored, Date.now()) && stored.staff) {
+      showSearch(stored);
+    } else {
+      clearStored();
+      showNoSearch('กรุณาเปิดจากเมนู ถามข้อมูลสินค้า ใน Job Tracker');
+    }
+  }
+
+  function addText(parent, tag, cls, text) {
+    var el = document.createElement(tag);
+    if (cls) el.className = cls;
+    el.textContent = text;
+    parent.appendChild(el);
+    return el;
+  }
+
+  function renderResults(data) {
+    els.results.textContent = '';
+    var items = data && Array.isArray(data.items) ? data.items : [];
+    if (data && data.notInCatalog || items.length === 0) {
+      var none = document.createElement('div');
+      none.className = 'none';
+      addText(none, 'div', 'name', 'ไม่พบในเอกสารสินค้า');
+      addText(none, 'div', 'hint', 'ลองพิมพ์คำอื่น หรือใช้รหัสสินค้า 7 หลัก');
+      els.results.appendChild(none);
+      return;
+    }
+    items.forEach(function (it) {
+      var card = document.createElement('div');
+      card.className = 'card';
+      addText(card, 'div', 'code', String(it.code));
+      addText(card, 'div', 'name', String(it.name));
+      splitDetails(it.details).forEach(function (line) {
+        addText(card, 'div', 'detail', line);
+      });
+      if (it.duplicateCode) {
+        addText(card, 'div', 'dup', 'รหัสนี้พบมากกว่า 1 รายการในเอกสาร โปรดตรวจสอบ');
+      }
+      if (it.citation) {
+        var btn = addText(card, 'button', 'cite', citationLine(it.citation));
+        btn.type = 'button';
+        btn.addEventListener('click', function () { openOverlay(it.citation); });
+      }
+      els.results.appendChild(card);
+    });
+  }
+
+  function doSearch() {
+    if (busy || !current) return;
+    var q = els.q.value.trim();
+    if (!q) return;
+    if (q.length > 200) q = q.slice(0, 200);
+    if (!isSessionValid(current, Date.now())) {
+      clearStored();
+      showNoSearch(reasonMessage('expired'));
+      return;
+    }
+    busy = true;
+    els.go.disabled = true;
+    els.status.textContent = 'กำลังค้นหา...';
+    postJson('/functions/v1/search', { q: q }, { 'x-pqa-session': current.session }).then(function (r) {
+      busy = false;
+      els.go.disabled = false;
+      els.status.textContent = '';
+      if (r.status === 200 && r.data) {
+        renderResults(r.data);
+      } else if (r.status === 401) {
+        clearStored();
+        showNoSearch(reasonMessage('expired'));
+      } else {
+        els.results.textContent = '';
+        showMessage(reasonMessage('network'), true);
+      }
+    });
+  }
+
+  function openOverlay(c) {
+    lastFocus = document.activeElement;
+    els.ovText.textContent = citationLine(c);
+    els.ovErr.hidden = true;
+    els.ovImg.hidden = false;
+    if (isTrustedPageUrl(c.pageImageUrl, SUPABASE_URL)) {
+      els.ovImg.onerror = function () { els.ovImg.hidden = true; els.ovErr.hidden = false; };
+      els.ovImg.src = c.pageImageUrl;
+    } else {
+      els.ovImg.removeAttribute('src');
+      els.ovImg.hidden = true;
+      els.ovErr.hidden = false;
+    }
+    els.overlay.className = 'open';
+    els.ovClose.focus();
+  }
+  function closeOverlay() {
+    els.overlay.className = '';
+    els.ovImg.onerror = null;
+    els.ovImg.removeAttribute('src');
+    if (lastFocus && lastFocus.focus) lastFocus.focus();
+  }
+
+  els.go.addEventListener('click', doSearch);
+  els.q.addEventListener('keydown', function (e) {
+    if (e.key === 'Enter') { e.preventDefault(); doSearch(); }
+  });
+  els.ovClose.addEventListener('click', closeOverlay);
+  document.addEventListener('keydown', function (e) {
+    if (e.key === 'Escape' && els.overlay.className === 'open') closeOverlay();
+  });
+
+  startSession();
+})();
+</script>
+</body>
+</html>

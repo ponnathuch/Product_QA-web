@@ -119,6 +119,41 @@
   .cite-text { flex: 1; min-width: 0; }
   .cite-go { font-weight: bold; white-space: nowrap; }
 
+  /* ---------- Product Files on the card: photo, certificate banner, document chips ---------- */
+  .body { display: flex; gap: var(--space-3); align-items: flex-start; }
+  .info { flex: 1; min-width: 0; }
+  .thumb {
+    position: relative; flex: 0 0 var(--size-thumb); width: var(--size-thumb); height: var(--size-thumb); padding: 0;
+    border: 1px solid var(--c-line); border-radius: var(--radius-m); background: var(--c-img-backing); cursor: pointer; overflow: hidden;
+  }
+  .thumb:hover { border-color: var(--c-brand); }
+  .thumb img { display: block; width: 100%; height: 100%; object-fit: contain; }
+  .thumb .count {
+    position: absolute; right: var(--space-1); bottom: var(--space-1); font-size: var(--fs-xs);
+    background: var(--c-scrim-bar); color: var(--c-scrim-ink); border-radius: var(--radius-s); padding: 0 var(--space-2);
+  }
+  .cert {
+    display: flex; gap: var(--space-3); align-items: flex-start; margin-top: var(--space-3);
+    border: 1px solid; border-radius: var(--radius-s); padding: var(--space-2) var(--space-3); font-size: var(--fs-s);
+  }
+  .cert b { display: block; }
+  .cert-dot { flex: 0 0 var(--space-3); width: var(--space-3); height: var(--space-3); margin-top: var(--space-1); border-radius: 50%; background: currentColor; }
+  .cert.ok { background: var(--c-ok-soft); color: var(--c-ok); border-color: var(--c-ok-line); }
+  .cert.warn { background: var(--c-warn-soft); color: var(--c-warn); border-color: var(--c-warn-line); }
+  .cert.err { background: var(--c-err-soft); color: var(--c-err); border-color: var(--c-err-line); }
+  .docs { display: flex; flex-wrap: wrap; gap: var(--space-2); margin-top: var(--space-3); }
+  .doc {
+    display: inline-flex; align-items: center; gap: var(--space-2); min-height: var(--size-target);
+    border: 1px solid var(--c-brand-line); background: var(--c-surface-2); color: var(--c-brand-strong);
+    border-radius: var(--radius-pill); padding: var(--space-1) var(--space-3); font-size: var(--fs-s); cursor: pointer;
+    transition: background var(--dur-fast), border-color var(--dur-fast);
+  }
+  .doc:hover { background: var(--c-brand-soft); border-color: var(--c-brand); }
+  .doc i { flex: 0 0 var(--space-2); width: var(--space-2); height: var(--space-2); border-radius: var(--space-0); background: var(--kind); }
+  .k-catalog { --kind: var(--c-kind-catalog); } .k-photo { --kind: var(--c-kind-photo); } .k-spec { --kind: var(--c-kind-spec); }
+  .k-shipping { --kind: var(--c-kind-shipping); } .k-promo { --kind: var(--c-kind-promo); } .k-payment { --kind: var(--c-kind-payment); }
+  .k-cert { --kind: var(--c-kind-cert); } .k-other { --kind: var(--c-kind-other); }
+
   .in-answer {
     font-size: var(--fs-xs); font-weight: bold; color: var(--c-ok); background: var(--c-ok-soft);
     border-radius: var(--radius-pill); padding: var(--space-0) var(--space-2);
@@ -186,6 +221,29 @@
     min-height: var(--size-target); padding: var(--space-2) var(--space-4); font-size: var(--fs-s); border: 0; border-radius: var(--radius-m);
     background: var(--c-scrim-ink); color: var(--c-scrim-ink-on); cursor: pointer; font-weight: bold;
   }
+  #ovTabs { display: flex; gap: var(--space-2); padding: var(--space-3) var(--space-3) 0; overflow-x: auto; }
+  .ov-tab {
+    flex: 0 0 auto; min-height: var(--size-target); border: 0; border-radius: var(--radius-pill); padding: var(--space-1) var(--space-3);
+    background: var(--c-scrim-bar); color: var(--c-scrim-ink); font-size: var(--fs-s); cursor: pointer;
+  }
+  .ov-tab[aria-selected="true"] { background: var(--c-scrim-ink); color: var(--c-scrim-ink-on); font-weight: bold; }
+  #ovStage { position: relative; }
+  .ov-nav {
+    position: absolute; top: 50%; margin-top: calc(var(--size-target-lg) / -2); width: var(--size-target-lg); height: var(--size-target-lg);
+    display: flex; align-items: center; justify-content: center; padding: 0; border: 0; border-radius: 50%;
+    background: var(--c-scrim-ink); color: var(--c-scrim-ink-on); cursor: pointer;
+  }
+  .ov-nav svg { width: var(--size-icon); height: var(--size-icon); }
+  #ovPrev { left: var(--space-3); }
+  #ovNext { right: var(--space-3); }
+  #ovStrip { display: flex; gap: var(--space-2); padding: var(--space-2) var(--space-3) var(--space-3); overflow-x: auto; }
+  .ov-thumb {
+    flex: 0 0 auto; width: var(--size-strip-w); height: var(--size-strip-h); padding: 0; overflow: hidden;
+    border: var(--outline-w) solid transparent; border-radius: var(--radius-s); background: var(--c-img-backing); color: var(--c-scrim-ink-on);
+    font-size: var(--fs-xs); opacity: 0.6; cursor: pointer;
+  }
+  .ov-thumb[aria-current="true"] { opacity: 1; border-color: var(--c-scrim-ink); }
+  .ov-thumb img { display: block; width: 100%; height: 100%; object-fit: cover; }
   #ovBody { flex: 1; overflow: auto; padding: var(--space-3); }
   #ovImg { width: 100%; max-width: var(--max-page-image); height: auto; display: block; margin: 0 auto; border-radius: var(--radius-s); background: var(--c-img-backing); }
   #ovErr { color: var(--c-scrim-ink); padding: var(--space-5) var(--space-3); text-align: center; }
@@ -253,10 +311,16 @@
     <div id="ovText"></div>
     <button type="button" id="ovClose">ปิด</button>
   </div>
+  <div id="ovTabs" role="tablist" aria-label="ประเภทเอกสาร"></div>
   <div id="ovBody">
-    <img id="ovImg" alt="หน้าเอกสารสินค้า">
-    <div id="ovErr" hidden>โหลดรูปหน้าเอกสารไม่ได้</div>
+    <div id="ovStage">
+      <img id="ovImg" alt="หน้าเอกสารสินค้า">
+      <div id="ovErr" hidden>ลิงก์รูปหมดอายุ กรุณาค้นหาใหม่</div>
+      <button type="button" id="ovPrev" class="ov-nav" aria-label="ก่อนหน้า"></button>
+      <button type="button" id="ovNext" class="ov-nav" aria-label="ถัดไป"></button>
+    </div>
   </div>
+  <div id="ovStrip" aria-label="เอกสารทั้งหมดของรหัสนี้"></div>
 </div>
 
 <script>
@@ -304,6 +368,7 @@
     return url.indexOf(baseUrl + '/storage/v1/object/public/catalog-pages/') === 0;
   }
   function citationLine(c) {
+    if (c.page === null || c.page === undefined) return 'ที่มา: ' + c.documentTitle;
     return 'ที่มา: ' + c.documentTitle + ' หน้า ' + c.page;
   }
   function initialOf(name) {
@@ -344,6 +409,137 @@
     if (!main.length) return { main: list, other: [] };
     return { main: main, other: other };
   }
+
+  // ---- Product Files (phase 3) ----
+  var KIND_ORDER = ['photo', 'spec', 'shipping', 'promo', 'payment', 'cert', 'other'];
+  var KIND_LABEL = {
+    photo: 'รูปสินค้า', spec: 'รายละเอียด', shipping: 'ค่าขนส่ง', promo: 'โปรโมชัน',
+    payment: 'QR ชำระเงิน', cert: 'ใบรับรอง', other: 'เอกสาร'
+  };
+  var THAI_MONTHS = ['ม.ค.', 'ก.พ.', 'มี.ค.', 'เม.ย.', 'พ.ค.', 'มิ.ย.', 'ก.ค.', 'ส.ค.', 'ก.ย.', 'ต.ค.', 'พ.ย.', 'ธ.ค.'];
+  var IMAGE_ERROR_TEXT = 'ลิงก์รูปหมดอายุ กรุณาค้นหาใหม่';
+
+  // 'YYYY-MM-DD' -> '4 ก.ค. 2570' (Buddhist year). Anything else -> ''.
+  function thaiDate(iso) {
+    var m = /^(\d{4})-(\d{2})-(\d{2})/.exec(typeof iso === 'string' ? iso : '');
+    if (!m) return '';
+    var month = parseInt(m[2], 10);
+    var day = parseInt(m[3], 10);
+    if (month < 1 || month > 12 || day < 1 || day > 31) return '';
+    return day + ' ' + THAI_MONTHS[month - 1] + ' ' + (parseInt(m[1], 10) + 543);
+  }
+  function kindLabel(kind) {
+    return KIND_LABEL[kind] || KIND_LABEL.other;
+  }
+  function kindOf(kind) {
+    return KIND_ORDER.indexOf(kind) === -1 ? 'other' : kind;
+  }
+  // Keep only well-formed Product Files; unknown kinds become 'other'. Server order (seq) is kept.
+  function normalizeFiles(files) {
+    if (!Array.isArray(files)) return [];
+    var out = [];
+    for (var i = 0; i < files.length; i++) {
+      var f = files[i];
+      if (!f || typeof f !== 'object') continue;
+      out.push({
+        id: f.id,
+        kind: kindOf(f.kind),
+        title: typeof f.title === 'string' && f.title ? f.title : kindLabel(kindOf(f.kind)),
+        url: typeof f.url === 'string' ? f.url : null,
+        thumbUrl: typeof f.thumbUrl === 'string' ? f.thumbUrl : null
+      });
+    }
+    return out;
+  }
+  // One entry per kind present, in KIND_ORDER: { kind, label, count }.
+  function groupFiles(files) {
+    var list = normalizeFiles(files);
+    var out = [];
+    for (var k = 0; k < KIND_ORDER.length; k++) {
+      var n = 0;
+      for (var i = 0; i < list.length; i++) if (list[i].kind === KIND_ORDER[k]) n++;
+      if (n) out.push({ kind: KIND_ORDER[k], label: kindLabel(KIND_ORDER[k]), count: n });
+    }
+    return out;
+  }
+  function chipLabel(label, count) {
+    return count > 1 ? label + ' ' + count : label;
+  }
+  function catalogLabel(page) {
+    return 'แคตตาล็อก หน้า ' + page;
+  }
+  function fileCountLabel(n) {
+    return n + ' ไฟล์';
+  }
+  // Certificate banner text and tone, or null when there is no usable certificate.
+  function certBanner(cert) {
+    if (!cert || typeof cert !== 'object') return null;
+    var heads = { expired: 'ใบรับรองหมดอายุแล้ว', expiring: 'ใบรับรองใกล้หมดอายุ', valid: 'ใบรับรองใช้ได้' };
+    var tones = { expired: 'err', expiring: 'warn', valid: 'ok' };
+    if (!heads[cert.status]) return null;
+    var parts = [];
+    if (cert.title) parts.push(String(cert.title));
+    if (cert.certNo) parts.push('เลขที่ ' + cert.certNo);
+    var until = thaiDate(cert.validUntil);
+    if (until) parts.push('ใช้ได้ถึง ' + until);
+    return {
+      tone: tones[cert.status],
+      head: heads[cert.status],
+      detail: parts.join(' · '),
+      note: cert.status === 'expired' ? 'โปรดขอใบใหม่ก่อนแจ้งลูกค้า' : ''
+    };
+  }
+  // Viewer entries for one card: the catalog page first, then Product Files grouped by kind (seq order kept inside a kind).
+  function viewerEntries(item) {
+    var out = [];
+    var c = item && item.citation;
+    if (c && c.page !== null && c.page !== undefined) {
+      out.push({ kind: 'catalog', title: c.documentTitle + ' หน้า ' + c.page, tab: catalogLabel(c.page), url: c.pageImageUrl || null, thumbUrl: c.pageImageUrl || null });
+    }
+    var list = normalizeFiles(item && item.files);
+    for (var k = 0; k < KIND_ORDER.length; k++) {
+      for (var i = 0; i < list.length; i++) {
+        if (list[i].kind === KIND_ORDER[k]) out.push(list[i]);
+      }
+    }
+    return out;
+  }
+  // Tabs for the viewer: { kind, label, index } with index = first entry of that kind.
+  function viewerTabs(entries) {
+    var tabs = [];
+    for (var i = 0; i < entries.length; i++) {
+      var e = entries[i];
+      var found = -1;
+      for (var t = 0; t < tabs.length; t++) if (tabs[t].kind === e.kind) found = t;
+      if (found === -1) {
+        tabs.push({ kind: e.kind, label: e.kind === 'catalog' ? e.tab : kindLabel(e.kind), index: i, count: 1 });
+      } else {
+        tabs[found].count++;
+      }
+    }
+    for (var j = 0; j < tabs.length; j++) {
+      if (tabs[j].kind !== 'catalog') tabs[j].label = chipLabel(tabs[j].label, tabs[j].count);
+    }
+    return tabs;
+  }
+  function startIndex(entries, kind) {
+    for (var i = 0; i < entries.length; i++) if (entries[i].kind === kind) return i;
+    return 0;
+  }
+  // Previous/next with wrap-around. dir is -1 or 1.
+  function stepIndex(i, n, dir) {
+    if (n <= 0) return 0;
+    return (((i + dir) % n) + n) % n;
+  }
+  function viewerHeading(code, entry, i, n) {
+    return code + ' · ' + entry.title + ' · ' + (i + 1) + ' จาก ' + n;
+  }
+  // Signed Product File URL from this project's storage, or a same-origin relative path (dev preview only).
+  function isTrustedFileUrl(url, baseUrl) {
+    if (typeof url !== 'string' || !url) return false;
+    if (url.indexOf(baseUrl + '/storage/v1/object/sign/product-files/') === 0) return true;
+    return !/^[a-z][a-z0-9+.\-]*:/i.test(url) && url.indexOf('//') !== 0 && url.indexOf('..') === -1;
+  }
   // END PURE
 
   // Small inline icons, built node by node with createElementNS.
@@ -353,6 +549,8 @@
     page: [['path', 'M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z'], ['path', 'M14 2v6h6'], ['path', 'M8 13h8'], ['path', 'M8 17h5']],
     search: [['circle', '11,11,7'], ['path', 'M20 20l-3.5-3.5']],
     empty: [['circle', '11,11,7'], ['path', 'M20 20l-3.5-3.5'], ['path', 'M8.5 11h5']],
+    chevronL: [['path', 'M15 18l-6-6 6-6']],
+    chevronR: [['path', 'M9 18l6-6-6-6']],
     // lucide message-square-text, thumbs-up, thumbs-down
     answer: [['path', 'M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z'], ['path', 'M13 8H7'], ['path', 'M17 12H7']],
     thumbUp: [['path', 'M7 10v12'], ['path', 'M15 5.88 14 10h5.83a2 2 0 0 1 1.92 2.56l-2.33 8A2 2 0 0 1 17.5 22H4a2 2 0 0 1-2-2v-8a2 2 0 0 1 2-2h2.76a2 2 0 0 0 1.79-1.11L12 2a3.13 3.13 0 0 1 3 3.88Z']],
@@ -395,7 +593,12 @@
     ovText: document.getElementById('ovText'),
     ovClose: document.getElementById('ovClose'),
     ovImg: document.getElementById('ovImg'),
-    ovErr: document.getElementById('ovErr')
+    ovErr: document.getElementById('ovErr'),
+    ovBody: document.getElementById('ovBody'),
+    ovTabs: document.getElementById('ovTabs'),
+    ovStrip: document.getElementById('ovStrip'),
+    ovPrev: document.getElementById('ovPrev'),
+    ovNext: document.getElementById('ovNext')
   };
   var current = null;
   var busy = false;
@@ -654,6 +857,16 @@
     }
   }
 
+  function makeDocChip(kind, label, it) {
+    var chip = document.createElement('button');
+    chip.type = 'button';
+    chip.className = 'doc k-' + kind;
+    addText(chip, 'i', '', '');
+    addText(chip, 'span', '', label);
+    chip.addEventListener('click', function () { openViewer(it, kind); });
+    return chip;
+  }
+
   function makeCard(it, inAnswer) {
       var card = document.createElement('div');
       card.className = 'card';
@@ -666,14 +879,35 @@
       cp.type = 'button';
       cp.addEventListener('click', function () { copyCode(code, cp); });
       card.appendChild(head);
-      addText(card, 'div', 'name', String(it.name));
+      var files = normalizeFiles(it.files);
+      var body = document.createElement('div');
+      body.className = 'body';
+      if (isTrustedFileUrl(it.photoUrl, SUPABASE_URL)) {
+        var th = document.createElement('button');
+        th.type = 'button';
+        th.className = 'thumb';
+        th.setAttribute('aria-label', 'ดูรูปสินค้า ' + code);
+        var timg = document.createElement('img');
+        timg.alt = '';
+        timg.onerror = function () { th.hidden = true; };
+        timg.src = it.photoUrl;
+        th.appendChild(timg);
+        if (files.length) addText(th, 'span', 'count', fileCountLabel(files.length));
+        th.addEventListener('click', function () { openViewer(it, 'photo'); });
+        body.appendChild(th);
+      }
+      var info = document.createElement('div');
+      info.className = 'info';
+      addText(info, 'div', 'name', String(it.name));
       var lines = splitDetails(it.details);
       if (lines.length) {
         var ul = document.createElement('ul');
         ul.className = 'details';
         lines.forEach(function (line) { addText(ul, 'li', '', line); });
-        card.appendChild(ul);
+        info.appendChild(ul);
       }
+      body.appendChild(info);
+      card.appendChild(body);
       if (it.duplicateCode) {
         var dup = document.createElement('div');
         dup.className = 'dup';
@@ -681,14 +915,35 @@
         addText(dup, 'span', '', 'รหัสนี้พบมากกว่า 1 รายการในเอกสาร โปรดตรวจสอบ');
         card.appendChild(dup);
       }
-      if (it.citation) {
+      var banner = certBanner(it.cert);
+      if (banner) {
+        var cb = document.createElement('div');
+        cb.className = 'cert ' + banner.tone;
+        addText(cb, 'span', 'cert-dot', '');
+        var cbText = document.createElement('div');
+        addText(cbText, 'b', '', banner.head);
+        if (banner.detail) addText(cbText, 'div', '', banner.detail);
+        if (banner.note) addText(cbText, 'div', '', banner.note);
+        cb.appendChild(cbText);
+        card.appendChild(cb);
+      }
+      var hasPage = it.citation && it.citation.page !== null && it.citation.page !== undefined;
+      var groups = groupFiles(files);
+      if (hasPage || groups.length) {
+        var docs = document.createElement('div');
+        docs.className = 'docs';
+        if (hasPage) docs.appendChild(makeDocChip('catalog', catalogLabel(it.citation.page), it));
+        groups.forEach(function (g) { docs.appendChild(makeDocChip(g.kind, chipLabel(g.label, g.count), it)); });
+        card.appendChild(docs);
+      }
+      if (hasPage) {
         var btn = document.createElement('button');
         btn.type = 'button';
         btn.className = 'cite';
         btn.appendChild(icon('page'));
         addText(btn, 'span', 'cite-text', citationLine(it.citation));
         addText(btn, 'span', 'cite-go', 'ดูหน้าเอกสาร');
-        btn.addEventListener('click', function () { openOverlay(it.citation); });
+        btn.addEventListener('click', function () { openViewer(it, 'catalog'); });
         card.appendChild(btn);
       }
       return card;
@@ -728,28 +983,100 @@
     });
   }
 
-  function openOverlay(c) {
-    lastFocus = document.activeElement;
-    els.ovText.textContent = citationLine(c);
+  // The viewer shows every image of one card: catalog page first, then Product Files by kind.
+  var viewer = null; // { code, entries, tabs, index }
+
+  function entryUrlOk(e) {
+    if (e.kind === 'catalog') return isTrustedPageUrl(e.url, SUPABASE_URL);
+    return isTrustedFileUrl(e.url, SUPABASE_URL);
+  }
+  function showEntry(i) {
+    var v = viewer;
+    if (!v) return;
+    v.index = i;
+    var e = v.entries[i];
+    els.ovText.textContent = viewerHeading(v.code, e, i, v.entries.length);
     els.ovErr.hidden = true;
     els.ovImg.hidden = false;
-    if (isTrustedPageUrl(c.pageImageUrl, SUPABASE_URL)) {
-      els.ovImg.onerror = function () { els.ovImg.hidden = true; els.ovErr.hidden = false; };
-      els.ovImg.src = c.pageImageUrl;
+    els.ovImg.alt = e.title;
+    if (entryUrlOk(e)) {
+      els.ovImg.onerror = function () { els.ovImg.hidden = true; els.ovErr.textContent = IMAGE_ERROR_TEXT; els.ovErr.hidden = false; };
+      els.ovImg.src = e.url;
     } else {
+      els.ovImg.onerror = null;
       els.ovImg.removeAttribute('src');
       els.ovImg.hidden = true;
+      els.ovErr.textContent = IMAGE_ERROR_TEXT;
       els.ovErr.hidden = false;
     }
+    var tabBtns = els.ovTabs.children;
+    for (var t = 0; t < tabBtns.length; t++) {
+      tabBtns[t].setAttribute('aria-selected', v.tabs[t].kind === e.kind ? 'true' : 'false');
+    }
+    var thumbs = els.ovStrip.children;
+    for (var s = 0; s < thumbs.length; s++) {
+      if (s === i) thumbs[s].setAttribute('aria-current', 'true');
+      else thumbs[s].removeAttribute('aria-current');
+    }
+    try { thumbs[i].scrollIntoView({ block: 'nearest', inline: 'nearest' }); } catch (err) { /* older engines */ }
+    els.ovBody.scrollTop = 0;
+  }
+  function buildViewer(item) {
+    var entries = viewerEntries(item);
+    var tabs = viewerTabs(entries);
+    viewer = { code: String(item.code), entries: entries, tabs: tabs, index: 0 };
+    els.ovTabs.textContent = '';
+    tabs.forEach(function (tab) {
+      var b = addText(els.ovTabs, 'button', 'ov-tab', tab.label);
+      b.type = 'button';
+      b.setAttribute('role', 'tab');
+      b.addEventListener('click', function () { showEntry(tab.index); });
+    });
+    els.ovStrip.textContent = '';
+    entries.forEach(function (e, i) {
+      var b = document.createElement('button');
+      b.type = 'button';
+      b.className = 'ov-thumb';
+      b.setAttribute('aria-label', e.title);
+      var turl = e.thumbUrl;
+      if (e.kind === 'catalog' ? isTrustedPageUrl(turl, SUPABASE_URL) : isTrustedFileUrl(turl, SUPABASE_URL)) {
+        var im = document.createElement('img');
+        im.alt = '';
+        im.loading = 'lazy';
+        im.onerror = function () { im.hidden = true; b.textContent = String(i + 1); };
+        im.src = turl;
+        b.appendChild(im);
+      } else {
+        b.textContent = String(i + 1);
+      }
+      b.addEventListener('click', function () { showEntry(i); });
+      els.ovStrip.appendChild(b);
+    });
+    var multi = entries.length > 1;
+    els.ovPrev.hidden = !multi;
+    els.ovNext.hidden = !multi;
+    els.ovTabs.hidden = tabs.length < 1;
+    els.ovStrip.hidden = !multi;
+  }
+  function openViewer(item, kind) {
+    buildViewer(item);
+    if (!viewer.entries.length) { viewer = null; return; }
+    lastFocus = document.activeElement;
     els.overlay.className = 'open';
     document.body.style.overflow = 'hidden';
+    showEntry(startIndex(viewer.entries, kind));
     els.ovClose.focus();
+  }
+  function stepViewer(dir) {
+    if (!viewer || viewer.entries.length < 2) return;
+    showEntry(stepIndex(viewer.index, viewer.entries.length, dir));
   }
   function closeOverlay() {
     els.overlay.className = '';
     document.body.style.overflow = '';
     els.ovImg.onerror = null;
     els.ovImg.removeAttribute('src');
+    viewer = null;
     if (lastFocus && lastFocus.focus) lastFocus.focus();
   }
 
@@ -776,11 +1103,18 @@
     }
   });
   els.ovClose.addEventListener('click', closeOverlay);
+  els.ovPrev.addEventListener('click', function () { stepViewer(-1); });
+  els.ovNext.addEventListener('click', function () { stepViewer(1); });
+  els.ovPrev.appendChild(icon('chevronL'));
+  els.ovNext.appendChild(icon('chevronR'));
   els.overlay.addEventListener('click', function (e) {
-    if (e.target === els.overlay || e.target.id === 'ovBody') closeOverlay();
+    if (e.target === els.overlay || e.target.id === 'ovBody' || e.target.id === 'ovStage') closeOverlay();
   });
   document.addEventListener('keydown', function (e) {
-    if (e.key === 'Escape' && els.overlay.className === 'open') closeOverlay();
+    if (els.overlay.className !== 'open') return;
+    if (e.key === 'Escape') closeOverlay();
+    else if (e.key === 'ArrowLeft') { e.preventDefault(); stepViewer(-1); }
+    else if (e.key === 'ArrowRight') { e.preventDefault(); stepViewer(1); }
   });
 
   startSession();

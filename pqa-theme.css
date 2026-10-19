@@ -39,6 +39,17 @@
   --c-scrim-ink: #fcfdfe;
   --c-scrim-ink-on: #172033;
   --c-img-backing: #fcfdfe;
+  --c-ok-line: #a6d9bb;
+
+  /* File Kind markers on document chips (non-text, 3:1 against the surface) */
+  --c-kind-catalog: var(--c-brand);
+  --c-kind-photo: var(--c-brand-line);
+  --c-kind-spec: #6a4bd6;
+  --c-kind-shipping: #b86e00;
+  --c-kind-promo: #b8337a;
+  --c-kind-payment: #1f8a4c;
+  --c-kind-cert: var(--c-ink-3);
+  --c-kind-other: var(--c-ink-3);
 
   /* shape and space */
   --radius-s: 8px;
@@ -63,6 +74,9 @@
   --size-target-lg: 44px;
   --size-empty: 64px;
   --size-tile: 130px;
+  --size-thumb: 92px;
+  --size-strip-w: 54px;
+  --size-strip-h: 70px;
   --size-field: 220px;
   --size-table-min: 760px;
   --max-narrow: 720px;
@@ -113,6 +127,11 @@
     --c-err-line: #6b2b26;
     --c-badge: #f2c46b;
     --c-badge-ink: #2a2414;
+    --c-ok-line: #2f6b4a;
+    --c-kind-spec: #b7a2ff;
+    --c-kind-shipping: #f0a830;
+    --c-kind-promo: #f08cc0;
+    --c-kind-payment: #6fd39a;
     --shadow-1: none;
     --focus: 0 0 0 3px rgba(138, 180, 255, 0.4);
   }

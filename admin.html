@@ -3,130 +3,66 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<meta name="theme-color" content="#1849a9">
 <title>หน้าผู้ดูแล - ถามข้อมูลสินค้า</title>
+<link rel="stylesheet" href="pqa-theme.css?v=1">
 <style>
-  :root {
-    --brand: #1a5fd0;
-    --brand-dark: #1849a9;
-    --brand-soft: #eaf1fd;
-    --ink: #172033;
-    --ink-2: #475069;
-    --ink-3: #7a8399;
-    --line: #e2e6ee;
-    --bg: #f3f5f9;
-    --card: #ffffff;
-    --warn-bg: #fff6e0;
-    --warn-line: #f0c95c;
-    --warn-ink: #7a5300;
-    --err: #b3261e;
-    --ok: #1f8a4c;
-    --radius: 14px;
-    --shadow: 0 1px 2px rgba(23, 32, 51, 0.06), 0 4px 14px rgba(23, 32, 51, 0.06);
-  }
-  * { box-sizing: border-box; }
-  html, body { margin: 0; }
-  body {
-    font-family: "Leelawadee UI", "Leelawadee", Tahoma, sans-serif;
-    background: var(--bg);
-    color: var(--ink);
-    line-height: 1.55;
-    -webkit-text-size-adjust: 100%;
-  }
-  button, input, select { font-family: inherit; font-size: 1rem; }
-  [hidden] { display: none !important; }
+  /* Page layout only. Colours, fonts, radii, spacing and focus come from pqa-theme.css tokens. */
+  .top-inner { max-width: var(--max-wide); }
 
-  .top {
-    background: linear-gradient(120deg, #1849a9 0%, #1a5fd0 55%, #3b82f6 100%);
-    color: #fff;
-    padding: 18px 16px 64px;
-  }
-  .top-inner { max-width: 1000px; margin: 0 auto; display: flex; align-items: center; gap: 12px; }
-  .logo {
-    width: 42px; height: 42px; flex: 0 0 42px;
-    border-radius: 12px; background: rgba(255, 255, 255, 0.18);
-    display: flex; align-items: center; justify-content: center;
-  }
-  .logo svg { width: 24px; height: 24px; }
-  .title { flex: 1; min-width: 0; }
-  .title h1 { font-size: 1.25rem; margin: 0; line-height: 1.3; }
-  .title p { margin: 0; font-size: 0.85rem; opacity: 0.85; }
-  #backLink {
-    color: #fff; text-decoration: none; font-size: 0.85rem; white-space: nowrap;
-    background: rgba(255, 255, 255, 0.16); border-radius: 999px; padding: 6px 12px;
-  }
-  #backLink:hover { background: rgba(255, 255, 255, 0.28); }
+  main { max-width: var(--max-wide); margin: calc(var(--space-6) * -1 - var(--space-3)) auto 0; padding: 0 var(--space-4) calc(var(--space-6) + var(--space-2)); }
+  .panel { margin-bottom: var(--space-3); }
+  .panel h2 { font-size: var(--fs-l); margin: 0 0 var(--space-3); color: var(--c-brand-strong); }
+  #msg { display: flex; gap: var(--space-3); align-items: flex-start; }
+  #msg.error { color: var(--c-err); font-weight: bold; }
+  #msg.info { color: var(--c-ink-2); }
 
-  main { max-width: 1000px; margin: -44px auto 0; padding: 0 16px 40px; }
-  .panel {
-    background: var(--card); border-radius: var(--radius); box-shadow: var(--shadow);
-    padding: 16px; margin-bottom: 14px;
-  }
-  .panel h2 { font-size: 1.1rem; margin: 0 0 10px; color: var(--brand-dark); }
-  #msg { display: flex; gap: 10px; align-items: flex-start; }
-  #msg.error { color: var(--err); font-weight: bold; }
-  #msg.info { color: var(--ink-2); }
+  .filters { display: flex; flex-wrap: wrap; gap: var(--space-3); align-items: flex-end; }
+  .filters label { display: flex; flex-direction: column; font-size: var(--fs-xs); color: var(--c-ink-3); gap: var(--space-0); }
+  .note { font-size: var(--fs-s); color: var(--c-ink-3); margin-top: var(--space-2); }
+  .note.err { color: var(--c-err); }
+  .note.ok { color: var(--c-ok); }
 
-  .filters { display: flex; flex-wrap: wrap; gap: 10px; align-items: flex-end; }
-  .filters label { display: flex; flex-direction: column; font-size: 0.82rem; color: var(--ink-3); gap: 2px; }
-  .filters input, .filters select, .form-grid input, .form-grid select {
-    padding: 8px 10px; border: 1.5px solid var(--line); border-radius: 10px; background: #fbfcfe; color: var(--ink);
-  }
-  .filters input:focus, .filters select:focus, .form-grid input:focus, .form-grid select:focus {
-    outline: none; border-color: var(--brand); box-shadow: 0 0 0 3px rgba(26, 95, 208, 0.14);
-  }
-  .btn {
-    padding: 9px 18px; border: 0; border-radius: 10px; background: var(--brand); color: #fff;
-    font-weight: bold; cursor: pointer; white-space: nowrap;
-  }
-  .btn:hover { background: var(--brand-dark); }
-  .btn:disabled { background: #9aa8c4; cursor: default; }
-  .btn.alt { background: #fff; color: var(--brand-dark); border: 1.5px solid var(--brand); }
-  .btn.alt:hover { background: var(--brand-soft); }
-  .note { font-size: 0.85rem; color: var(--ink-3); margin-top: 6px; }
-  .note.err { color: var(--err); }
-  .note.ok { color: var(--ok); }
+  .tiles { display: grid; grid-template-columns: repeat(auto-fill, minmax(var(--size-tile), 1fr)); gap: var(--space-3); margin-top: var(--space-3); }
+  .tile { background: var(--c-brand-soft); border-radius: var(--radius-m); padding: var(--space-3); }
+  .tile .num { font-size: var(--fs-xl); font-weight: bold; color: var(--c-brand-strong); }
+  .tile .lbl { font-size: var(--fs-xs); color: var(--c-ink-2); }
+  .top-nf { margin: var(--space-3) 0 0; padding-left: var(--space-5); font-size: var(--fs-s); color: var(--c-ink-2); }
+  .sub { font-size: var(--fs-s); font-weight: bold; margin-top: var(--space-4); color: var(--c-ink-2); }
 
-  .tiles { display: grid; grid-template-columns: repeat(auto-fill, minmax(130px, 1fr)); gap: 10px; margin-top: 12px; }
-  .tile { background: var(--brand-soft); border-radius: 12px; padding: 10px 12px; }
-  .tile .num { font-size: 1.4rem; font-weight: bold; color: var(--brand-dark); }
-  .tile .lbl { font-size: 0.82rem; color: var(--ink-2); }
-  .top-nf { margin: 12px 0 0; padding-left: 22px; font-size: 0.92rem; color: var(--ink-2); }
-  .sub { font-size: 0.9rem; font-weight: bold; margin-top: 14px; color: var(--ink-2); }
-
-  .table-wrap { overflow-x: auto; margin-top: 12px; border: 1px solid var(--line); border-radius: 10px; }
-  table { border-collapse: collapse; width: 100%; font-size: 0.88rem; min-width: 760px; }
-  th, td { padding: 7px 9px; text-align: left; vertical-align: top; border-bottom: 1px solid var(--line); }
-  th { background: #f6f8fc; color: var(--ink-2); white-space: nowrap; }
-  td.q { min-width: 180px; word-break: break-word; }
-  td.a { min-width: 220px; color: var(--ink-2); word-break: break-word; }
-  td.codes { font-family: Consolas, "Courier New", monospace; white-space: nowrap; }
+  .table-wrap { overflow-x: auto; margin-top: var(--space-3); border: 1px solid var(--c-line); border-radius: var(--radius-m); }
+  table { border-collapse: collapse; width: 100%; font-size: var(--fs-s); min-width: var(--size-table-min); }
+  th, td { padding: var(--space-2); text-align: left; vertical-align: top; border-bottom: 1px solid var(--c-line); }
+  th { background: var(--c-surface-2); color: var(--c-ink-2); white-space: nowrap; }
+  td.q { min-width: 180px; word-break: break-word; } /* ds-allow-hardcode: table column minimum */
+  td.a { min-width: var(--size-field); color: var(--c-ink-2); word-break: break-word; }
+  td.codes { font-family: var(--font-code); white-space: nowrap; }
   tr:last-child td { border-bottom: 0; }
-  .tag { display: inline-block; border-radius: 999px; padding: 0 8px; font-size: 0.78rem; background: var(--warn-bg); color: var(--warn-ink); border: 1px solid var(--warn-line); }
-  .pager { display: flex; gap: 10px; align-items: center; margin-top: 10px; flex-wrap: wrap; }
+  .tag { display: inline-block; border-radius: var(--radius-pill); padding: 0 var(--space-2); font-size: var(--fs-xs); background: var(--c-warn-soft); color: var(--c-warn); border: 1px solid var(--c-warn-line); }
+  .pager { display: flex; gap: var(--space-3); align-items: center; margin-top: var(--space-3); flex-wrap: wrap; }
 
-  .form-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 12px; }
-  .form-grid label { display: flex; flex-direction: column; font-size: 0.85rem; color: var(--ink-2); gap: 3px; }
-  .form-grid .hint { font-size: 0.78rem; color: var(--ink-3); }
+  .form-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(var(--size-field), 1fr)); gap: var(--space-3); }
+  .form-grid label { display: flex; flex-direction: column; font-size: var(--fs-s); color: var(--c-ink-2); gap: var(--space-1); }
+  .form-grid .hint { font-size: var(--fs-xs); color: var(--c-ink-3); }
 
   @media (max-width: 520px) {
-    .top { padding: 14px 14px 58px; }
+    .top { padding: var(--space-3) var(--space-3) calc(var(--space-6) * 2 - var(--space-3)); }
     .title p { display: none; }
-    main { padding: 0 12px 32px; }
+    main { padding: 0 var(--space-3) var(--space-6); }
   }
+  @media (prefers-reduced-motion: reduce) { * { transition: none; animation: none; } }
 </style>
 </head>
 <body>
 <header class="top">
   <div class="top-inner">
     <div class="logo" aria-hidden="true">
-      <svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/><path d="M9.5 9a2.5 2.5 0 0 1 5 0c0 1.5-2.5 2-2.5 3.5"/><path d="M12 15h.01"/></svg>
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/><path d="M9.5 9a2.5 2.5 0 0 1 5 0c0 1.5-2.5 2-2.5 3.5"/><path d="M12 15h.01"/></svg>
     </div>
     <div class="title">
       <h1>หน้าผู้ดูแล</h1>
       <p>สถิติ ประวัติคำถาม และการตั้งค่า</p>
     </div>
-    <a id="backLink" href="app.html">กลับหน้าค้นหา</a>
+    <a id="backLink" class="top-link" href="app.html">กลับหน้าค้นหา</a>
   </div>
 </header>
 
@@ -141,6 +77,7 @@
         <label>ถึง<input type="date" id="fTo"></label>
         <label>หน่วยงาน<input type="text" id="fUnit" maxlength="60" placeholder="ทั้งหมด"></label>
         <label>ผลตอบกลับ
+          <!-- ds-allow-native-select: native select keeps keyboard and screen-reader behaviour on old Edge 109 -->
           <select id="fFeedback">
             <option value="">ทั้งหมด</option>
             <option value="1">ถูกต้อง</option>
@@ -187,6 +124,7 @@
       <h2>ตั้งค่า</h2>
       <div class="form-grid">
         <label>ผู้ให้บริการโมเดล
+          <!-- ds-allow-native-select: native select keeps keyboard and screen-reader behaviour on old Edge 109 -->
           <select id="sProvider">
             <option value="gemini">Gemini</option>
             <option value="deepseek" disabled>DeepSeek (เปิดได้หลังตรวจนโยบายบริษัท)</option>

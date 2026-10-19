@@ -167,6 +167,21 @@
   .cite-text { flex: 1; min-width: 0; }
   .cite-go { font-weight: bold; white-space: nowrap; }
 
+  .in-answer {
+    font-size: 0.75rem; font-weight: bold; color: #1f6b3f; background: #e3f5ea;
+    border-radius: 999px; padding: 2px 9px;
+  }
+  .more { margin-top: 4px; }
+  .more > summary {
+    cursor: pointer; list-style: none; padding: 10px 14px; margin-bottom: 10px;
+    border: 1px dashed #c3cde0; border-radius: 12px; color: var(--ink-2); background: #fbfcfe;
+    font-size: 0.92rem;
+  }
+  .more > summary::-webkit-details-marker { display: none; }
+  .more > summary::before { content: "+ "; font-weight: bold; color: var(--brand); }
+  .more[open] > summary::before { content: "\2212  "; }
+  .more-note { font-size: 0.82rem; color: var(--ink-3); margin: -4px 4px 10px; }
+
   /* ---------- answer panel and feedback ---------- */
   .answer {
     background: var(--card); border-radius: var(--radius); box-shadow: var(--shadow);
@@ -357,6 +372,21 @@
   }
   function feedbackBody(logId, value) {
     return { logId: logId, value: value === -1 ? -1 : 1 };
+  }
+  // Cards named in the Answer come first; the rest are "other close matches".
+  // No Answer, or an Answer that names none of the cards: every card stays in main.
+  function splitByAnswer(items, answer) {
+    var list = Array.isArray(items) ? items : [];
+    if (typeof answer !== 'string') return { main: list, other: [] };
+    var codes = answer.match(/[0-9]{7}/g) || [];
+    var main = [];
+    var other = [];
+    for (var i = 0; i < list.length; i++) {
+      if (codes.indexOf(String(list[i].code)) !== -1) main.push(list[i]);
+      else other.push(list[i]);
+    }
+    if (!main.length) return { main: list, other: [] };
+    return { main: main, other: other };
   }
   // END PURE
 
@@ -642,13 +672,30 @@
     var hasAnswer = typeof data.answer === 'string' && data.answer.trim() !== '';
     if (hasAnswer) els.results.appendChild(renderAnswer(data.answer));
     if (hasAnswer && hasLogId(data)) els.results.appendChild(renderFeedback(data.logId));
-    items.forEach(function (it, idx) {
+    var parts = splitByAnswer(items, hasAnswer ? data.answer : null);
+    var marked = parts.other.length > 0;
+    parts.main.forEach(function (it, idx) {
+      els.results.appendChild(makeCard(it, marked));
+      if (idx === 0 && !hasAnswer && hasLogId(data)) els.results.appendChild(renderFeedback(data.logId));
+    });
+    if (parts.other.length) {
+      var more = document.createElement('details');
+      more.className = 'more';
+      addText(more, 'summary', '', 'รายการใกล้เคียงอื่น (' + parts.other.length + ')');
+      addText(more, 'div', 'more-note', 'ไม่อยู่ในคำตอบ อาจไม่ตรงกับที่ถาม');
+      parts.other.forEach(function (it) { more.appendChild(makeCard(it, false)); });
+      els.results.appendChild(more);
+    }
+  }
+
+  function makeCard(it, inAnswer) {
       var card = document.createElement('div');
       card.className = 'card';
       var head = document.createElement('div');
       head.className = 'card-head';
       var code = String(it.code);
       addText(head, 'span', 'code', code);
+      if (inAnswer) addText(head, 'span', 'in-answer', 'อยู่ในคำตอบ');
       var cp = addText(head, 'button', 'copy', 'คัดลอกรหัส');
       cp.type = 'button';
       cp.addEventListener('click', function () { copyCode(code, cp); });
@@ -678,9 +725,7 @@
         btn.addEventListener('click', function () { openOverlay(it.citation); });
         card.appendChild(btn);
       }
-      els.results.appendChild(card);
-      if (idx === 0 && !hasAnswer && hasLogId(data)) els.results.appendChild(renderFeedback(data.logId));
-    });
+      return card;
   }
 
   function doSearch() {

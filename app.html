@@ -167,6 +167,31 @@
   .cite-text { flex: 1; min-width: 0; }
   .cite-go { font-weight: bold; white-space: nowrap; }
 
+  /* ---------- answer panel and feedback ---------- */
+  .answer {
+    background: var(--card); border-radius: var(--radius); box-shadow: var(--shadow);
+    padding: 14px 16px; margin-bottom: 12px; border-left: 5px solid var(--brand);
+  }
+  .answer-label { font-size: 0.82rem; font-weight: bold; color: var(--brand-dark); margin-bottom: 4px; }
+  .answer-text p { margin: 0 0 6px; font-size: 1rem; color: var(--ink); word-break: break-word; }
+  .answer-text p.gap { height: 0.6em; margin: 0; }
+  .answer-note { font-size: 0.8rem; color: var(--ink-3); margin-top: 6px; }
+  .fb { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin: 0 4px 14px; font-size: 0.9rem; color: var(--ink-2); }
+  .fb-btn {
+    border: 1px solid var(--line); background: #fff; color: var(--ink-2);
+    border-radius: 999px; padding: 4px 14px; font-size: 0.9rem; cursor: pointer;
+  }
+  .fb-btn:hover { border-color: var(--brand); color: var(--brand); }
+  .fb-btn:disabled { cursor: default; opacity: 0.6; }
+  .fb-btn.sel { border-color: var(--brand); background: var(--brand-soft); color: var(--brand-dark); font-weight: bold; }
+  .fb-thanks { color: var(--ok); }
+  .fb-err { color: var(--err); font-size: 0.85rem; }
+  #adminLink {
+    color: #fff; text-decoration: none; font-size: 0.85rem; white-space: nowrap;
+    background: rgba(255, 255, 255, 0.16); border-radius: 999px; padding: 6px 12px;
+  }
+  #adminLink:hover { background: rgba(255, 255, 255, 0.28); }
+
   .empty { text-align: center; padding: 28px 16px; }
   .empty svg { width: 64px; height: 64px; color: #b9c6de; }
   .empty .empty-title { font-size: 1.08rem; font-weight: bold; margin-top: 8px; color: var(--ink); }
@@ -201,6 +226,7 @@
     .top-inner { flex-wrap: wrap; }
     .title p { display: none; }
     #who { order: 3; flex: 1 1 100%; max-width: 100%; }
+    #adminLink { order: 4; }
     main { padding: 0 12px 32px; }
     .search-row { flex-direction: column; }
     #goBtn { padding: 12px; }
@@ -220,6 +246,7 @@
       <p>ค้นจากเอกสารสินค้าของบริษัท พร้อมหน้าเอกสารอ้างอิง</p>
     </div>
     <div id="who"></div>
+    <a id="adminLink" href="admin.html" hidden>หน้าผู้ดูแล</a>
   </div>
 </header>
 
@@ -312,6 +339,25 @@
     var s = typeof name === 'string' ? name.trim() : '';
     return s ? s.charAt(0) : '?';
   }
+  function limitMessage(n) {
+    return 'วันนี้ถามครบ ' + n + ' ครั้งแล้ว ถามใหม่ได้พรุ่งนี้';
+  }
+  // Split an Answer into display lines; blank lines are kept as one empty entry (spacing).
+  function answerLines(text) {
+    if (typeof text !== 'string') return [];
+    var raw = text.replace(/\r\n?/g, '\n').split('\n');
+    var out = [];
+    for (var i = 0; i < raw.length; i++) {
+      var line = raw[i].trim();
+      if (line) out.push(line);
+      else if (out.length && out[out.length - 1] !== '') out.push('');
+    }
+    while (out.length && out[out.length - 1] === '') out.pop();
+    return out;
+  }
+  function feedbackBody(logId, value) {
+    return { logId: logId, value: value === -1 ? -1 : 1 };
+  }
   // END PURE
 
   // Small inline icons, built node by node with createElementNS.
@@ -346,6 +392,7 @@
 
   var els = {
     who: document.getElementById('who'),
+    adminLink: document.getElementById('adminLink'),
     msg: document.getElementById('msg'),
     box: document.getElementById('searchBox'),
     q: document.getElementById('q'),
@@ -430,6 +477,7 @@
     if (sess.isAdmin) addText(nm, 'span', 'badge-admin', 'ผู้ดูแล');
     addText(t, 'span', 'who-unit', staff.un || '');
     els.who.appendChild(t);
+    els.adminLink.hidden = !sess.isAdmin;
   }
 
   function showSearch(sess) {
@@ -443,6 +491,7 @@
     current = null;
     els.box.hidden = true;
     els.who.textContent = '';
+    els.adminLink.hidden = true;
     els.results.textContent = '';
     els.status.textContent = '';
     showMessage(text, true);
@@ -518,6 +567,64 @@
     }
   }
 
+  function renderAnswer(text) {
+    var box = document.createElement('div');
+    box.className = 'answer';
+    addText(box, 'div', 'answer-label', 'คำตอบ');
+    var body = document.createElement('div');
+    body.className = 'answer-text';
+    answerLines(text).forEach(function (line) {
+      if (line === '') addText(body, 'p', 'gap', '');
+      else addText(body, 'p', '', line);
+    });
+    box.appendChild(body);
+    addText(box, 'div', 'answer-note', 'สรุปจากเอกสารด้านล่าง ตรวจสอบกับหน้าเอกสารก่อนแจ้งลูกค้า');
+    return box;
+  }
+
+  function renderFeedback(logId) {
+    var row = document.createElement('div');
+    row.className = 'fb';
+    addText(row, 'span', '', 'ข้อมูลนี้ถูกต้องไหม');
+    var up = addText(row, 'button', 'fb-btn', '👍 ถูกต้อง');
+    var down = addText(row, 'button', 'fb-btn', '👎 ไม่ถูกต้อง');
+    up.type = 'button';
+    down.type = 'button';
+    var note = addText(row, 'span', '', '');
+    var chosen = 0;
+    function paint() {
+      up.className = 'fb-btn' + (chosen === 1 ? ' sel' : '');
+      down.className = 'fb-btn' + (chosen === -1 ? ' sel' : '');
+    }
+    function send(value) {
+      if (!current || up.disabled) return;
+      up.disabled = true;
+      down.disabled = true;
+      note.className = '';
+      note.textContent = '';
+      postJson('/functions/v1/feedback', feedbackBody(logId, value), { 'x-pqa-session': current.session }).then(function (r) {
+        up.disabled = false;
+        down.disabled = false;
+        if (r.status === 200 && r.data && r.data.ok) {
+          chosen = value;
+          paint();
+          note.className = 'fb-thanks';
+          note.textContent = 'ขอบคุณสำหรับความเห็น';
+        } else {
+          note.className = 'fb-err';
+          note.textContent = 'ส่งความเห็นไม่สำเร็จ';
+        }
+      });
+    }
+    up.addEventListener('click', function () { send(1); });
+    down.addEventListener('click', function () { send(-1); });
+    return row;
+  }
+
+  function hasLogId(data) {
+    return data && typeof data.logId === 'number' && isFinite(data.logId);
+  }
+
   function renderResults(data) {
     els.results.textContent = '';
     var items = data && Array.isArray(data.items) ? data.items : [];
@@ -532,7 +639,10 @@
       return;
     }
     els.status.textContent = 'พบ ' + items.length + ' รายการ';
-    items.forEach(function (it) {
+    var hasAnswer = typeof data.answer === 'string' && data.answer.trim() !== '';
+    if (hasAnswer) els.results.appendChild(renderAnswer(data.answer));
+    if (hasAnswer && hasLogId(data)) els.results.appendChild(renderFeedback(data.logId));
+    items.forEach(function (it, idx) {
       var card = document.createElement('div');
       card.className = 'card';
       var head = document.createElement('div');
@@ -569,6 +679,7 @@
         card.appendChild(btn);
       }
       els.results.appendChild(card);
+      if (idx === 0 && !hasAnswer && hasLogId(data)) els.results.appendChild(renderFeedback(data.logId));
     });
   }
 
@@ -596,6 +707,9 @@
       } else if (r.status === 401) {
         clearStored();
         showNoSearch(reasonMessage('expired'));
+      } else if (r.status === 429 && r.data && r.data.error === 'daily_limit') {
+        els.results.textContent = '';
+        showMessage(limitMessage(r.data.limit), true);
       } else {
         els.results.textContent = '';
         showMessage(reasonMessage('network'), true);

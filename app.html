@@ -223,6 +223,16 @@
     min-height: var(--size-target); padding: var(--space-2) var(--space-4); font-size: var(--fs-s); border: 0; border-radius: var(--radius-m);
     background: var(--c-scrim-ink); color: var(--c-scrim-ink-on); cursor: pointer; font-weight: bold;
   }
+  #ovZoom { display: flex; align-items: center; gap: var(--space-1); }
+  .ov-zoom {
+    min-width: var(--size-target); min-height: var(--size-target); display: flex; align-items: center; justify-content: center;
+    padding: 0 var(--space-2); border: 0; border-radius: var(--radius-m); background: var(--c-scrim-bar); color: var(--c-scrim-ink);
+    font-size: var(--fs-xs); cursor: pointer; box-shadow: inset 0 0 0 1px var(--c-scrim-ink);
+  }
+  .ov-zoom svg { width: var(--size-icon); height: var(--size-icon); }
+  .ov-zoom:disabled { opacity: 0.4; cursor: default; }
+  #ovBody.zoomed { cursor: grab; }
+  #ovBody.panning { cursor: grabbing; }
   #ovTabs { display: flex; gap: var(--space-2); padding: var(--space-3) var(--space-3) 0; overflow-x: auto; }
   .ov-tab {
     flex: 0 0 auto; min-height: var(--size-target); border: 0; border-radius: var(--radius-pill); padding: var(--space-1) var(--space-3);
@@ -246,7 +256,7 @@
   }
   .ov-thumb[aria-current="true"] { opacity: 1; border-color: var(--c-scrim-ink); }
   .ov-thumb img { display: block; width: 100%; height: 100%; object-fit: cover; }
-  #ovBody { flex: 1; overflow: auto; padding: var(--space-3); }
+  #ovBody { flex: 1; overflow: auto; padding: var(--space-3); touch-action: pan-x pan-y; }
   #ovImg { width: 100%; max-width: var(--max-page-image); height: auto; display: block; margin: 0 auto; border-radius: var(--radius-s); background: var(--c-img-backing); }
   #ovErr { color: var(--c-scrim-ink); padding: var(--space-5) var(--space-3); text-align: center; }
 
@@ -311,6 +321,11 @@
 <div id="overlay" role="dialog" aria-modal="true" aria-labelledby="ovText">
   <div id="ovBar">
     <div id="ovText"></div>
+    <div id="ovZoom" role="group" aria-label="ซูมรูป">
+      <button type="button" id="ovZoomOut" class="ov-zoom" aria-label="ซูมออก"></button>
+      <button type="button" id="ovZoomReset" class="ov-zoom ov-zoom-pct" aria-label="พอดีจอ">100%</button>
+      <button type="button" id="ovZoomIn" class="ov-zoom" aria-label="ซูมเข้า"></button>
+    </div>
     <button type="button" id="ovClose">ปิด</button>
   </div>
   <div id="ovTabs" role="tablist" aria-label="ประเภทเอกสาร"></div>
@@ -534,6 +549,23 @@
     if (n <= 0) return 0;
     return (((i + dir) % n) + n) % n;
   }
+  // Viewer zoom: 1 = fit to the screen (as before), up to 5x.
+  var ZOOM_MIN = 1, ZOOM_MAX = 5, ZOOM_STEP = 1.25;
+  function clampZoom(z) {
+    return Math.min(ZOOM_MAX, Math.max(ZOOM_MIN, Math.round(z * 100) / 100));
+  }
+  function zoomBy(z, dir) {
+    return clampZoom(dir > 0 ? z * ZOOM_STEP : z / ZOOM_STEP);
+  }
+  // Keep the content point under (x, y) still while the scale goes from z0 to z1.
+  // x, y are offsets inside the scroll box; returns the new scrollLeft / scrollTop.
+  function zoomScroll(scrollLeft, scrollTop, x, y, z0, z1) {
+    var r = z1 / z0;
+    return { left: Math.max(0, (scrollLeft + x) * r - x), top: Math.max(0, (scrollTop + y) * r - y) };
+  }
+  function zoomLabel(z) {
+    return Math.round(z * 100) + '%';
+  }
   function viewerHeading(code, entry, i, n) {
     return code + ' · ' + entry.title + ' · ' + (i + 1) + ' จาก ' + n;
   }
@@ -554,6 +586,9 @@
     empty: [['circle', '11,11,7'], ['path', 'M20 20l-3.5-3.5'], ['path', 'M8.5 11h5']],
     chevronL: [['path', 'M15 18l-6-6 6-6']],
     chevronR: [['path', 'M9 18l6-6-6-6']],
+    // lucide zoom-in, zoom-out
+    zoomIn: [['circle', '11,11,8'], ['path', 'M21 21l-4.35-4.35'], ['path', 'M11 8v6'], ['path', 'M8 11h6']],
+    zoomOut: [['circle', '11,11,8'], ['path', 'M21 21l-4.35-4.35'], ['path', 'M8 11h6']],
     // lucide message-square-text, thumbs-up, thumbs-down
     answer: [['path', 'M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z'], ['path', 'M13 8H7'], ['path', 'M17 12H7']],
     thumbUp: [['path', 'M7 10v12'], ['path', 'M15 5.88 14 10h5.83a2 2 0 0 1 1.92 2.56l-2.33 8A2 2 0 0 1 17.5 22H4a2 2 0 0 1-2-2v-8a2 2 0 0 1 2-2h2.76a2 2 0 0 0 1.79-1.11L12 2a3.13 3.13 0 0 1 3 3.88Z']],
@@ -595,6 +630,9 @@
     overlay: document.getElementById('overlay'),
     ovText: document.getElementById('ovText'),
     ovClose: document.getElementById('ovClose'),
+    ovZoomIn: document.getElementById('ovZoomIn'),
+    ovZoomOut: document.getElementById('ovZoomOut'),
+    ovZoomReset: document.getElementById('ovZoomReset'),
     ovImg: document.getElementById('ovImg'),
     ovErr: document.getElementById('ovErr'),
     ovBody: document.getElementById('ovBody'),
@@ -1024,6 +1062,7 @@
     }
     try { thumbs[i].scrollIntoView({ block: 'nearest', inline: 'nearest' }); } catch (err) { /* older engines */ }
     els.ovBody.scrollTop = 0;
+    setZoom(1);
   }
   function buildViewer(item) {
     var entries = viewerEntries(item);
@@ -1112,6 +1151,7 @@
   els.ovPrev.appendChild(icon('chevronL'));
   els.ovNext.appendChild(icon('chevronR'));
   els.overlay.addEventListener('click', function (e) {
+    if (zoom > 1) return; // a click after panning a zoomed picture must not close the viewer
     if (e.target === els.overlay || e.target.id === 'ovBody' || e.target.id === 'ovStage') closeOverlay();
   });
   document.addEventListener('keydown', function (e) {
@@ -1119,6 +1159,99 @@
     if (e.key === 'Escape') closeOverlay();
     else if (e.key === 'ArrowLeft') { e.preventDefault(); stepViewer(-1); }
     else if (e.key === 'ArrowRight') { e.preventDefault(); stepViewer(1); }
+  });
+
+  // ---------- viewer zoom ----------
+  var zoom = 1;
+  var baseWidth = 0; // image width at zoom 1, measured when zoom leaves 1
+  function setZoom(z, x, y) {
+    var img = els.ovImg;
+    var body = els.ovBody;
+    z = clampZoom(z);
+    if (z === 1) {
+      img.style.width = '';
+      img.style.maxWidth = '';
+      baseWidth = 0;
+    } else {
+      if (!baseWidth) baseWidth = img.getBoundingClientRect().width || body.clientWidth;
+      var cx = x === undefined ? body.clientWidth / 2 : x;
+      var cy = y === undefined ? body.clientHeight / 2 : y;
+      var next = zoomScroll(body.scrollLeft, body.scrollTop, cx, cy, zoom, z);
+      img.style.maxWidth = 'none';
+      img.style.width = Math.round(baseWidth * z) + 'px';
+      body.scrollLeft = next.left;
+      body.scrollTop = next.top;
+    }
+    zoom = z;
+    body.classList.toggle('zoomed', z > 1);
+    els.ovZoomReset.textContent = zoomLabel(z);
+    els.ovZoomOut.disabled = z <= ZOOM_MIN;
+    els.ovZoomIn.disabled = z >= ZOOM_MAX;
+  }
+  function pointIn(e) {
+    var r = els.ovBody.getBoundingClientRect();
+    return { x: e.clientX - r.left, y: e.clientY - r.top };
+  }
+  els.ovZoomIn.appendChild(icon('zoomIn'));
+  els.ovZoomOut.appendChild(icon('zoomOut'));
+  els.ovZoomIn.addEventListener('click', function () { setZoom(zoomBy(zoom, 1)); });
+  els.ovZoomOut.addEventListener('click', function () { setZoom(zoomBy(zoom, -1)); });
+  els.ovZoomReset.addEventListener('click', function () { setZoom(1); });
+  // Ctrl + wheel zooms (plain wheel keeps scrolling a tall page).
+  els.ovBody.addEventListener('wheel', function (e) {
+    if (!e.ctrlKey || els.ovImg.hidden) return;
+    e.preventDefault();
+    var p = pointIn(e);
+    setZoom(zoomBy(zoom, e.deltaY < 0 ? 1 : -1), p.x, p.y);
+  }, { passive: false });
+  els.ovImg.addEventListener('dblclick', function (e) {
+    var p = pointIn(e);
+    setZoom(zoom > 1 ? 1 : 2.5, p.x, p.y);
+  });
+  // Drag to pan with a mouse; two fingers pinch to zoom (one finger scrolls natively).
+  var pointers = {};
+  var pan = null;
+  var pinch = null;
+  function pointerCount() { return Object.keys(pointers).length; }
+  els.ovBody.addEventListener('pointerdown', function (e) {
+    pointers[e.pointerId] = { x: e.clientX, y: e.clientY };
+    if (e.pointerType === 'mouse' && zoom > 1 && e.button === 0) {
+      pan = { x: e.clientX, y: e.clientY, left: els.ovBody.scrollLeft, top: els.ovBody.scrollTop };
+      els.ovBody.classList.add('panning');
+      e.preventDefault();
+    }
+    if (pointerCount() === 2) {
+      var ids = Object.keys(pointers);
+      var a = pointers[ids[0]], b = pointers[ids[1]];
+      pinch = { dist: Math.hypot(a.x - b.x, a.y - b.y) || 1, zoom: zoom };
+    }
+  });
+  els.ovBody.addEventListener('pointermove', function (e) {
+    if (!pointers[e.pointerId]) return;
+    pointers[e.pointerId] = { x: e.clientX, y: e.clientY };
+    if (pan) {
+      els.ovBody.scrollLeft = pan.left - (e.clientX - pan.x);
+      els.ovBody.scrollTop = pan.top - (e.clientY - pan.y);
+    } else if (pinch && pointerCount() === 2) {
+      var ids = Object.keys(pointers);
+      var a = pointers[ids[0]], b = pointers[ids[1]];
+      var mid = pointIn({ clientX: (a.x + b.x) / 2, clientY: (a.y + b.y) / 2 });
+      setZoom(pinch.zoom * (Math.hypot(a.x - b.x, a.y - b.y) / pinch.dist), mid.x, mid.y);
+    }
+  });
+  function endPointer(e) {
+    delete pointers[e.pointerId];
+    if (pointerCount() < 2) pinch = null;
+    if (pan) { pan = null; els.ovBody.classList.remove('panning'); }
+  }
+  els.ovBody.addEventListener('pointerup', endPointer);
+  els.ovBody.addEventListener('pointercancel', endPointer);
+  els.ovBody.addEventListener('pointerleave', endPointer);
+  document.addEventListener('keydown', function (e) {
+    if (els.overlay.className !== 'open') return;
+    if (e.key === '+' || e.key === '=') { e.preventDefault(); setZoom(zoomBy(zoom, 1)); }
+    else if (e.key === '-') { e.preventDefault(); setZoom(zoomBy(zoom, -1)); }
+    else if (e.key === '0') { e.preventDefault(); setZoom(1); }
   });
 
   startSession();

@@ -268,6 +268,25 @@
     if (typeof stored.expiresAt !== 'number' || stored.expiresAt <= now) return false;
     return stored.isAdmin === true;
   }
+  // Decides what the reindex loop does after one reply.
+  // state: { afterId, total } before the call; r: { status, data } from callAdmin.
+  // Returns { kind: 'next', req, state } | { kind: 'done', total } | { kind: 'error', total }.
+  function reindexStep(state, r) {
+    var total = state.total;
+    var d = r && r.data;
+    if (!r || r.status !== 200 || !d || d.ok !== true) return { kind: 'error', total: total };
+    var rows = Number(d.rows);
+    var lastId = Number(d.lastId);
+    if (!isFinite(rows) || rows < 0 || !isFinite(lastId)) return { kind: 'error', total: total };
+    total += rows;
+    if (d.done === true) return { kind: 'done', total: total };
+    if (lastId <= state.afterId) return { kind: 'error', total: total }; // no progress: stop, never loop forever
+    return {
+      kind: 'next',
+      req: { action: 'reindex', afterId: lastId },
+      state: { afterId: lastId, total: total }
+    };
+  }
   // END PURE
 
   function $(id) { return document.getElementById(id); }
@@ -548,21 +567,33 @@
     });
   }
 
-  function reindexText(r) {
-    if (r.status === 200 && r.data && r.data.ok === true) {
-      return 'สร้างดัชนีแล้ว ' + r.data.rows + ' รายการ (' + r.data.model + ', ' + r.data.seconds + ' วินาที)';
-    }
-    return failText(r);
-  }
-
   function reindexAll() {
-    if (!window.confirm('สร้างดัชนีค้นหาใหม่ทั้งหมด? ใช้เวลาประมาณ 1-2 นาที และมีค่าใช้จ่ายเล็กน้อย')) return;
+    if (!window.confirm('สร้างดัชนีค้นหาใหม่ทั้งหมด? ระบบจะทำทีละชุดจนครบ อาจใช้เวลาหลายนาที และมีค่าใช้จ่ายเล็กน้อย')) return;
     els.reindex.disabled = true;
-    note(els.reindexNote, 'กำลังสร้างดัชนี... กรุณารอ อย่าปิดหน้านี้', '');
-    callAdmin({ action: 'reindex' }, 150000).then(function (r) {
+    var startedAt = Date.now();
+    note(els.reindexNote, 'กำลังสร้างดัชนี... ทำแล้ว 0 รายการ', '');
+
+    function finish(text, cls) {
       els.reindex.disabled = false;
-      note(els.reindexNote, reindexText(r), r.status === 200 ? 'ok' : 'err');
-    });
+      note(els.reindexNote, text, cls);
+    }
+
+    function run(req, state) {
+      callAdmin(req, 150000).then(function (r) {
+        var step = reindexStep(state, r);
+        if (step.kind === 'next') {
+          note(els.reindexNote, 'กำลังสร้างดัชนี... ทำแล้ว ' + step.state.total + ' รายการ', '');
+          run(step.req, step.state);
+        } else if (step.kind === 'done') {
+          var secs = Math.round((Date.now() - startedAt) / 100) / 10;
+          finish('สร้างดัชนีเสร็จ ' + step.total + ' รายการ ใช้เวลา ' + secs + ' วินาที', 'ok');
+        } else {
+          finish(failText(r) + ' (ทำแล้ว ' + step.total + ' รายการ)', 'err');
+        }
+      });
+    }
+
+    run({ action: 'reindex' }, { afterId: 0, total: 0 });
   }
 
   function start() {

@@ -154,6 +154,7 @@
   .k-catalog { --kind: var(--c-kind-catalog); } .k-photo { --kind: var(--c-kind-photo); } .k-spec { --kind: var(--c-kind-spec); }
   .k-shipping { --kind: var(--c-kind-shipping); } .k-promo { --kind: var(--c-kind-promo); } .k-payment { --kind: var(--c-kind-payment); }
   .k-cert { --kind: var(--c-kind-cert); } .k-other { --kind: var(--c-kind-other); }
+  .k-warranty { --kind: var(--c-kind-cert); } .k-manual { --kind: var(--c-kind-spec); } .k-letter { --kind: var(--c-kind-other); }
 
   .in-answer {
     font-size: var(--fs-xs); font-weight: bold; color: var(--c-ok); background: var(--c-ok-soft);
@@ -287,13 +288,13 @@
     <div class="search-row">
       <div class="field">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="M20 20l-3.5-3.5"/></svg>
-        <input type="text" id="q" maxlength="200" autocomplete="off" enterkeyhint="search" placeholder="พิมพ์ชื่อสินค้า หรือรหัส 7 หลัก" aria-label="คำค้นหา">
+        <input type="text" id="q" maxlength="200" autocomplete="off" enterkeyhint="search" placeholder="พิมพ์คำถาม หรือชื่อ/รหัสสินค้า" aria-label="พิมพ์คำถาม ชื่อสินค้า หรือรหัส 7 หลัก">
         <button type="button" id="clearBtn" aria-label="ล้างคำค้น" hidden>&times;</button>
       </div>
       <button type="button" id="goBtn" class="btn">ค้นหา</button>
     </div>
     <div class="chips" id="chips">
-      <span class="chips-label">ลองค้น:</span>
+      <span class="chips-label">ลองถาม:</span>
       <button type="button" class="chip">รถเข็น</button>
       <button type="button" class="chip">ที่นอนลม</button>
       <button type="button" class="chip">เครื่องพ่นยา</button>
@@ -412,10 +413,11 @@
   }
 
   // ---- Product Files (phase 3) ----
-  var KIND_ORDER = ['photo', 'spec', 'shipping', 'promo', 'payment', 'cert', 'other'];
+  var KIND_ORDER = ['photo', 'spec', 'shipping', 'promo', 'payment', 'cert', 'warranty', 'manual', 'letter', 'other'];
   var KIND_LABEL = {
     photo: 'รูปสินค้า', spec: 'รายละเอียด', shipping: 'ค่าขนส่ง', promo: 'โปรโมชัน',
-    payment: 'QR ชำระเงิน', cert: 'ใบรับรอง', other: 'เอกสาร'
+    payment: 'QR ชำระเงิน', cert: 'ใบรับรอง', warranty: 'ใบรับประกัน', manual: 'วิธีใช้',
+    letter: 'หนังสือ/บันทึก', other: 'เอกสาร'
   };
   var THAI_MONTHS = ['ม.ค.', 'ก.พ.', 'มี.ค.', 'เม.ย.', 'พ.ค.', 'มิ.ย.', 'ก.ค.', 'ส.ค.', 'ก.ย.', 'ต.ค.', 'พ.ย.', 'ธ.ค.'];
   var IMAGE_ERROR_TEXT = 'ลิงก์รูปหมดอายุ กรุณาค้นหาใหม่';

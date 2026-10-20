@@ -35,7 +35,9 @@
   th { background: var(--c-surface-2); color: var(--c-ink-2); white-space: nowrap; }
   td.q { min-width: 180px; word-break: break-word; } /* ds-allow-hardcode: table column minimum */
   td.a { min-width: var(--size-field); color: var(--c-ink-2); word-break: break-word; }
-  td.codes { font-family: var(--font-code); white-space: nowrap; }
+  td.codes { font-family: var(--font-code); white-space: normal; width: 1%; }
+  td.codes .code { display: block; white-space: nowrap; }
+  td.codes .more { display: block; color: var(--c-ink-3); font-family: var(--font-ui); font-size: var(--fs-xs); }
   tr:last-child td { border-bottom: 0; }
   .tag { display: inline-block; border-radius: var(--radius-pill); padding: 0 var(--space-2); font-size: var(--fs-xs); background: var(--c-warn-soft); color: var(--c-warn); border: 1px solid var(--c-warn-line); }
   .pager { display: flex; gap: var(--space-3); align-items: center; margin-top: var(--space-3); flex-wrap: wrap; }
@@ -235,6 +237,12 @@
   function codesText(v) {
     return Array.isArray(v) ? v.join(' ') : '';
   }
+  // Table cell only (CSV keeps every code): first few codes one per line, then "+N".
+  var CODES_SHOWN = 3;
+  function shortCodes(text) {
+    var all = String(text || '').split(' ').filter(function (x) { return x !== ''; });
+    return { shown: all.slice(0, CODES_SHOWN), more: Math.max(0, all.length - CODES_SHOWN), full: all.join(' ') };
+  }
   function logRowCells(r) {
     var unit = pick(r, 'un') !== undefined ? pick(r, 'un') : pick(r, 'unit');
     return [
@@ -432,7 +440,11 @@
       addText(tr, 'td', '', c[1] === undefined ? '' : String(c[1]));
       addText(tr, 'td', '', c[2] === undefined ? '' : String(c[2]));
       addText(tr, 'td', 'q', c[3] === undefined ? '' : String(c[3]));
-      addText(tr, 'td', 'codes', c[4]);
+      var tc = addText(tr, 'td', 'codes', '');
+      var sc = shortCodes(c[4]);
+      sc.shown.forEach(function (x) { addText(tc, 'span', 'code', x); });
+      if (sc.more > 0) addText(tc, 'span', 'more', '+' + sc.more + ' รายการ');
+      if (sc.full) tc.title = sc.full;
       var ta = addText(tr, 'td', 'a', c[5] === undefined || c[5] === null ? '' : String(c[5]));
       if (c[6]) addText(ta, 'div', '', c[6]);
       if (c[8]) addText(ta, 'span', 'tag', c[8]);

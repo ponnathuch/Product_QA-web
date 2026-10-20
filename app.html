@@ -24,7 +24,8 @@
   .who-unit { opacity: 0.88; font-size: var(--fs-xs); }
   .badge-admin {
     font-size: var(--fs-xs); background: var(--c-badge); color: var(--c-badge-ink);
-    border-radius: var(--radius-pill); padding: 0 var(--space-2); margin-left: var(--space-1); font-weight: bold;
+    border-radius: var(--radius-pill); padding: 0 var(--space-2); font-weight: bold;
+    flex: 0 0 auto; white-space: nowrap;
   }
 
   /* ---------- body ---------- */
@@ -666,10 +667,11 @@
     addText(els.who, 'span', 'avatar', initialOf(staff.n));
     var t = document.createElement('span');
     t.className = 'who-text';
-    var nm = addText(t, 'span', 'who-name', staff.n || '');
-    if (sess.isAdmin) addText(nm, 'span', 'badge-admin', 'ผู้ดูแล');
+    addText(t, 'span', 'who-name', staff.n || '');
     addText(t, 'span', 'who-unit', staff.un || '');
     els.who.appendChild(t);
+    // Outside .who-name: inside it the badge was clipped by the name's ellipsis and covered the text.
+    if (sess.isAdmin) addText(els.who, 'span', 'badge-admin', 'ผู้ดูแล');
     els.adminLink.hidden = !sess.isAdmin;
   }
 

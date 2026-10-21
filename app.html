@@ -367,7 +367,8 @@
     var out = [];
     var parts = text.split(' | ');
     for (var i = 0; i < parts.length; i++) {
-      var p = parts[i].trim();
+      // Catalog text read by AI sometimes keeps markdown bold markers (**...**); the card shows plain text.
+      var p = parts[i].split('**').join('').trim();
       if (p) out.push(p);
     }
     return out;

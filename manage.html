@@ -261,8 +261,8 @@
         <p id="pSource" class="note"></p>
         <label class="lbl" for="pName">ชื่อสินค้า (ที่ใช้ตอบพนักงาน)</label>
         <input type="text" id="pName" class="input" maxlength="200" autocomplete="off">
-        <label class="lbl" for="pDetails">รายละเอียด (แยกแต่ละข้อด้วย  |  )</label>
-        <textarea id="pDetails" class="input" rows="4" maxlength="2000"></textarea>
+        <label class="lbl" for="pDetails">รายละเอียด (ข้อละบรรทัด กด Enter เพื่อขึ้นข้อใหม่)</label>
+        <textarea id="pDetails" class="input" rows="6" maxlength="2000"></textarea>
         <div class="actions">
           <button type="button" id="saveItem" class="btn">บันทึกชื่อและรายละเอียด</button>
           <button type="button" id="resetItem" class="btn alt" hidden>กลับค่าเดิม</button>
@@ -625,6 +625,13 @@
     return extraCodes('', extras).filter(isCode);
   }
   function itemGetBody(code) { return { action: 'item.get', code: code }; }
+  // Details are stored as "a | b | c" (the card shows one bullet per part); the Editor sees one part per line.
+  function detailsToLines(s) {
+    return String(s || '').split('|').map(function (x) { return x.trim(); }).filter(function (x) { return x !== ''; }).join('\n');
+  }
+  function linesToDetails(text) {
+    return String(text || '').split(/\r?\n/).map(function (x) { return x.trim(); }).filter(function (x) { return x !== ''; }).join(' | ');
+  }
   function itemUpdateBody(code, name, details) {
     return { action: 'item.update', code: code, name: String(name).trim(), details: String(details).trim() };
   }
@@ -1300,7 +1307,7 @@
     if (master && master.status) src += (src ? ' | ' : '') + 'สถานะในรายการสินค้ากลาง: ' + master.status;
     els.pSource.textContent = src;
     state.initName = item ? String(item.name || '') : (master ? String(master.name || '') : '');
-    state.initDetails = item ? String(item.details || '') : (master ? String(master.details || '') : '');
+    state.initDetails = detailsToLines(item ? item.details : (master ? master.details : ''));
     if (!keepEdits) {
       els.pName.value = state.initName;
       els.pDetails.value = state.initDetails;
@@ -1725,11 +1732,11 @@
     var name = els.pName.value.trim();
     if (!name) { setNote(els.itemNote, 'กรุณาใส่ชื่อสินค้า', 'err'); els.pName.focus(); return; }
     if (name.length > 200) { setNote(els.itemNote, 'ชื่อสินค้ายาวเกิน 200 ตัวอักษร', 'err'); return; }
-    if (els.pDetails.value.trim().length > 2000) { setNote(els.itemNote, 'รายละเอียดยาวเกิน 2,000 ตัวอักษร', 'err'); return; }
+    if (linesToDetails(els.pDetails.value).length > 2000) { setNote(els.itemNote, 'รายละเอียดยาวเกิน 2,000 ตัวอักษร', 'err'); return; }
     state.busy = true;
     setBtnBusy(els.saveItem, true);
     setNote(els.itemNote, 'กำลังบันทึก...', '');
-    api(itemUpdateBody(state.code, name, els.pDetails.value)).then(function () {
+    api(itemUpdateBody(state.code, name, linesToDetails(els.pDetails.value))).then(function () {
       return reloadItem().then(function () { loadLog(true); setNote(els.itemNote, 'บันทึกแล้ว', 'ok'); });
     }, function (err) {
       setNote(els.itemNote, failText(err), 'err');

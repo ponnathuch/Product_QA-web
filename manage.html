@@ -103,6 +103,15 @@
   .review-img { flex: 0 0 var(--size-tile); width: var(--size-tile); border: 1px solid var(--c-line); border-radius: var(--radius-s); background: var(--c-img-backing); overflow: hidden; }
   .review-img img { display: block; width: 100%; height: auto; }
   .review-form { flex: 1; min-width: 0; }
+  .review-err { color: var(--c-err); font-weight: bold; }
+  .help { margin-top: var(--space-2); font-size: var(--fs-s); color: var(--c-ink-2); }
+  .help summary { cursor: pointer; color: var(--c-brand-strong); min-height: var(--size-target); display: flex; align-items: center; }
+  .help ul { margin: var(--space-1) 0 0; padding-left: var(--space-5); }
+  .help li { padding: var(--space-0) 0; }
+  .navline { max-width: var(--max-wide); margin: 0 auto; padding: 0 var(--space-4) var(--space-4); text-align: right; font-size: var(--fs-xs); color: var(--c-ink-3); }
+  @media (min-width: 900px) {
+    .navline { position: fixed; right: var(--space-3); bottom: var(--space-2); margin: 0; padding: var(--space-1) var(--space-2); max-width: 45%; background: var(--c-surface); border-radius: var(--radius-s); }
+  }
   .counter { font-size: var(--fs-xs); color: var(--c-ink-3); margin-top: var(--space-1); text-align: right; }
   .counter.warn { color: var(--c-warn); }
   .counter.err { color: var(--c-err); font-weight: bold; }
@@ -288,14 +297,22 @@
             <select id="addKind" class="input"></select>
           </div>
         </div>
+        <details id="kindHelp" class="help">
+          <summary>ไม่แน่ใจประเภท ดูตัวอย่าง</summary>
+          <ul id="kindHelpList"></ul>
+        </details>
         <label class="lbl" for="addCodesSearch">ใช้กับรหัสอื่นด้วย (ไม่บังคับ ค้นหา หรือวางรายการรหัส)</label>
         <div id="addCodes"></div>
-        <label class="lbl"><input type="checkbox" id="addAi" checked> ให้ AI อ่านข้อความจากรูป (เฉพาะประเภทที่ไม่ใช่รูปสินค้า)</label>
+        <label class="lbl" id="addAiLabel"><input type="checkbox" id="addAi" checked> ให้ AI อ่านข้อความจากรูป (เฉพาะประเภทที่ไม่ใช่รูปสินค้า)</label>
         <div class="actions">
           <button type="button" id="uploadBtn" class="btn" disabled>อัปโหลดรูปที่เลือก</button>
           <button type="button" id="clearStaged" class="btn alt" hidden>ล้างรายการ</button>
         </div>
         <p id="addNote" class="note" role="status" aria-live="polite"></p>
+        <div id="reviewBar" class="actions" hidden>
+          <button type="button" id="saveAll" class="btn">บันทึกทั้งหมด</button>
+        </div>
+        <p id="saveAllNote" class="note" role="status" aria-live="polite"></p>
         <div id="reviews"></div>
       </section>
 
@@ -343,6 +360,8 @@
     </section>
   </div>
 </main>
+
+<footer id="navLine" class="navline" role="status" hidden></footer>
 
 <div id="scrim"></div>
 
@@ -869,10 +888,11 @@
   function codesTagText(n) { return n > 0 ? codesLabel(n) : 'ยังไม่แสดงให้สาขา'; }
   // file.read reply -> form values, or { capped: true }.
   function readResult(data) {
-    if (data && data.capped === true) return { capped: true, text: '', certNo: '', validUntil: '', productName: '' };
+    if (data && data.capped === true) return { capped: true, kind: '', text: '', certNo: '', validUntil: '', productName: '' };
     var d = data && typeof data === 'object' ? data : {};
     return {
       capped: false,
+      kind: KIND_ORDER.indexOf(d.kind) !== -1 ? d.kind : '',
       text: typeof d.text === 'string' ? d.text : '',
       certNo: typeof d.certNo === 'string' ? d.certNo : '',
       validUntil: isIsoDate(d.validUntil) ? d.validUntil : '',
@@ -890,6 +910,112 @@
     if (typeof a.title === 'string') return a.title;
     if (typeof b.title === 'string') return b.title;
     return '';
+  }
+
+  // ---- Round 3: AI chooses the File Kind, review list, save all ----
+  var AUTO_KIND = 'auto';
+  var AUTO_LABEL = 'ให้ AI เลือกให้ (แนะนำ)';
+  var READ_PARALLEL = 2;
+  var KIND_HELP = {
+    photo: 'รูปกล่อง/ตัวสินค้า', spec: 'สเปก/ข้อมูลสินค้า', shipping: 'ตารางค่าขนส่ง', promo: 'ป้ายหรือใบโปรโมชัน',
+    payment: 'QR สำหรับชำระเงิน', cert: 'ใบ อย./ใบจดแจ้ง', warranty: 'ใบรับประกันสินค้า', manual: 'คู่มือ/วิธีใช้งาน',
+    letter: 'หนังสือจากบริษัท ประกาศ', other: 'อื่น ๆ ที่ไม่เข้าประเภทข้างต้น'
+  };
+  function kindHelpLines() {
+    return KIND_ORDER.map(function (k) { return KIND_LABEL[k] + ' = ' + KIND_HELP[k]; });
+  }
+  function isAutoKind(v) { return v === AUTO_KIND; }
+  // The 'ให้ AI อ่าน' checkbox is forced on and hidden while AI chooses the kind.
+  function aiBoxState(kindValue, current) {
+    if (isAutoKind(kindValue)) return { checked: true, hidden: true };
+    return { checked: current !== false, hidden: false };
+  }
+  // Which pictures get a file.read call: all of them when AI chooses; else non-photo ones when the box is ticked.
+  function shouldRead(kindValue, aiOn) {
+    if (isAutoKind(kindValue)) return true;
+    return aiOn === true && kindValue !== 'photo';
+  }
+  // Fresh row state for one uploaded picture. needsPick: the Editor must choose the kind before saving.
+  function newRow(base, kindValue) {
+    var auto = isAutoKind(kindValue);
+    return {
+      id: base.id, previewUrl: base.previewUrl, path: base.path, thumbPath: base.thumbPath, width: base.width, height: base.height,
+      codes: base.codes, target: base.target, kind: auto ? 'other' : kindOf(kindValue), title: '', text: '', certNo: '', validUntil: '',
+      aiNote: '', error: '', read: false, saved: false, dropped: false, needsPick: auto, auto: auto
+    };
+  }
+  // Changes to a row after file.read (or after a failed or capped reading). Cert fields only for kind cert.
+  function readPatch(row, res) {
+    if (res.capped) return { read: true, aiNote: CAPPED_TEXT, kind: row.auto ? 'other' : row.kind, needsPick: row.auto };
+    var kind = row.auto ? (res.kind || 'other') : row.kind;
+    var p = { read: true, kind: kind, text: res.text, needsPick: row.auto && !res.kind, aiNote: '' };
+    if (kind === 'cert') { p.certNo = res.certNo; p.validUntil = res.validUntil; }
+    if (res.productName) p.aiNote = 'AI อ่านชื่อสินค้าได้: ' + res.productName;
+    return p;
+  }
+  function readFailPatch(row, failMessage) {
+    return { read: true, aiNote: 'AI อ่านไม่สำเร็จ (' + failMessage + ') กรอกเองได้', kind: row.auto ? 'other' : row.kind, needsPick: row.auto };
+  }
+  function applyPatch(row, patch) {
+    for (var k in patch) row[k] = patch[k];
+    return row;
+  }
+  // Rows still listed in the review list (neither saved nor dropped).
+  function rowsToSave(rows) {
+    return (Array.isArray(rows) ? rows : []).filter(function (r) { return r && !r.saved && !r.dropped; });
+  }
+  function rowProblem(r) {
+    if (r.kind === 'cert' && r.validUntil && !isIsoDate(r.validUntil)) return 'วันที่ไม่ถูกต้อง';
+    if (normalizeText(r.text).trim().length > NOTE_MAX) return 'ข้อความยาวเกิน ' + formatInt(NOTE_MAX) + ' ตัวอักษร';
+    return '';
+  }
+  // Can 'บันทึกทั้งหมด' run? Rows whose kind the Editor must still pick block it.
+  function saveAllCheck(rows) {
+    var list = rowsToSave(rows);
+    if (!list.length) return { ok: false, count: 0, text: 'ไม่มีรูปที่ต้องบันทึก' };
+    var pick = list.filter(function (r) { return r.needsPick; }).length;
+    if (pick) return { ok: false, count: list.length, text: 'กรุณาเลือกประเภทของรูปที่ AI ยังไม่ได้เลือกให้ก่อน (' + pick + ' รูป)' };
+    return { ok: true, count: list.length, text: '' };
+  }
+  function saveProgressText(done, total) { return 'กำลังบันทึก ' + done + '/' + total + '...'; }
+  function saveSummary(saved, failed) {
+    if (!failed) return { tone: 'ok', text: 'บันทึกแล้ว ' + saved + ' รูป' };
+    return { tone: 'err', text: 'บันทึกแล้ว ' + saved + ' รูป ไม่สำเร็จ ' + failed + ' รูป (ดูข้อความใต้แต่ละรูป แก้แล้วกดบันทึกทั้งหมดอีกครั้ง)' };
+  }
+  function readProgressText(done, total) { return 'AI กำลังอ่านรูป ' + done + '/' + total + '...'; }
+  // Run fn over list with at most n in flight; resolves after all settle (fn must not reject).
+  function runPool(list, n, fn) {
+    var next = 0;
+    function worker() {
+      if (next >= list.length) return Promise.resolve();
+      var i = next++;
+      return Promise.resolve(fn(list[i], i)).then(worker);
+    }
+    var workers = [];
+    for (var w = 0; w < Math.min(n, list.length); w++) workers.push(worker());
+    return Promise.all(workers);
+  }
+
+  // ---- Item Master version line ----
+  function navInfoOf(data) {
+    if (!data || typeof data !== 'object') return null;
+    var c = data.count;
+    return {
+      version: typeof data.version === 'string' ? data.version.trim() : '',
+      syncedAt: typeof data.syncedAt === 'string' ? data.syncedAt : '',
+      count: c !== null && c !== undefined && c !== '' && Number(c) >= 0 ? Math.floor(Number(c)) : null
+    };
+  }
+  function navLineText(info) {
+    if (!info) return '';
+    var when = thaiDateTime(info.syncedAt);
+    var head = 'รายการสินค้า NAV: ';
+    if (!info.version && !when) return head + 'ยังไม่เคยอัปเดต';
+    var bits = [];
+    if (info.version) bits.push('รุ่น ' + info.version);
+    if (when) bits.push('อัปเดต ' + when);
+    if (info.count !== null) bits.push(formatInt(info.count) + ' รหัส');
+    return head + bits.join(' · ');
   }
   // END PURE
 
@@ -940,7 +1066,9 @@
     navNotice: byId('navNotice'), navNoticeText: byId('navNoticeText'), useNav: byId('useNav'),
     logList: byId('logList'), logMore: byId('logMore'), logNote: byId('logNote'),
     trashPanel: byId('trashPanel'), trashList: byId('trashList'), trashLoad: byId('trashLoad'), trashMore: byId('trashMore'), trashNote: byId('trashNote'),
-    scrim: byId('scrim'), backLink: byId('backLink')
+    scrim: byId('scrim'), backLink: byId('backLink'),
+    addAiLabel: byId('addAiLabel'), kindHelpList: byId('kindHelpList'), reviewBar: byId('reviewBar'), saveAll: byId('saveAll'),
+    saveAllNote: byId('saveAllNote'), navLine: byId('navLine')
   };
 
   var state = {
@@ -1102,6 +1230,23 @@
     });
     sel.value = value;
   }
+  // The upload kind box: 'ให้ AI เลือกให้' first and selected, then the ten kinds.
+  function fillAddKind(sel) {
+    clear(sel);
+    var a = add(sel, 'option', '', AUTO_LABEL);
+    a.value = AUTO_KIND;
+    KIND_ORDER.forEach(function (k) {
+      var o = add(sel, 'option', '', KIND_LABEL[k]);
+      o.value = k;
+    });
+    sel.value = AUTO_KIND;
+  }
+  function syncAiBox() {
+    var s = aiBoxState(els.addKind.value, els.addAi.checked);
+    els.addAi.checked = s.checked;
+    els.addAi.disabled = isAutoKind(els.addKind.value);
+    els.addAiLabel.hidden = s.hidden;
+  }
 
   // ---------- unsaved work ----------
   function itemDirty() {
@@ -1113,7 +1258,7 @@
     if (els.product.hidden) return false;
     if (els.noteText.value.trim() !== '') return true;
     if (state.staged.length) return true;
-    for (var i = 0; i < state.reviews.length; i++) if (!state.reviews[i].saved) return true;
+    if (rowsToSave(state.reviews).length) return true;
     return itemDirty();
   }
   function confirmLeave() {
@@ -1245,6 +1390,8 @@
     setNote(els.assignInfo, '', '');
     setNote(els.draftNoteMsg, '', '');
     setNote(els.addNote, '', '');
+    setNote(els.saveAllNote, '', '');
+    els.reviewBar.hidden = true;
     setNote(els.noteNote, '', '');
     setNote(els.itemNote, '', '');
     setNote(els.filesNote, '', '');
@@ -1967,15 +2114,16 @@
 
   function runUpload() {
     if (state.busy || !state.staged.length) return;
-    var kind = els.addKind.value;
+    var kindValue = els.addKind.value;
     var target = currentTarget();
     var codes = linkCodes(currentPrimary(), addPicker.getCodes());
     var batch = state.staged.slice();
-    var useAi = els.addAi.checked && kind !== 'photo';
+    var aiOn = els.addAi.checked;
     var resized = [];
-    var cappedShown = false;
+    var newRows = [];
     state.busy = true;
     els.uploadBtn.disabled = true;
+    setNote(els.saveAllNote, '', '');
     eachSeq(batch, function (s, i) {
       setNote(els.addNote, 'กำลังย่อรูป ' + (i + 1) + '/' + batch.length + '...', '');
       return resizeImage(s.file).then(function (r) { resized.push(r); });
@@ -1990,26 +2138,29 @@
         return putBlob(slots[i].uploadUrl, resized[i].main).then(function () {
           return putBlob(slots[i].thumbUploadUrl, resized[i].thumb);
         }).then(function () {
-          var review = {
+          var row = newRow({
             id: s.id, previewUrl: s.previewUrl, path: slots[i].path, thumbPath: slots[i].thumbPath,
-            width: resized[i].width, height: resized[i].height, kind: kind, codes: codes, target: target,
-            title: '', text: '', certNo: '', validUntil: '', aiNote: '', saved: false
-          };
-          state.reviews.push(review);
-          return review;
+            width: resized[i].width, height: resized[i].height, codes: codes, target: target
+          }, kindValue);
+          state.reviews.push(row);
+          newRows.push(row);
         });
       }).then(function () {
-        return eachSeq(state.reviews.filter(function (r) { return !r.read && !r.saved && r.kind !== 'photo'; }), function (r, i, all) {
-          if (!useAi || cappedShown) return null;
-          setNote(els.addNote, 'AI กำลังอ่านรูป ' + (i + 1) + '...', '');
-          return readWithAi(r).then(function (capped) { if (capped) cappedShown = true; });
+        var toRead = shouldRead(kindValue, aiOn) ? newRows : [];
+        var done = 0;
+        return runPool(toRead, READ_PARALLEL, function (r) {
+          return readWithAi(r).then(function () {
+            done++;
+            setNote(els.addNote, readProgressText(done, toRead.length), '');
+          });
         });
       });
     }).then(function () {
+      var capped = newRows.some(function (r) { return r.aiNote === CAPPED_TEXT; });
       state.staged = state.staged.filter(function (s) { return !batch.some(function (b) { return b.id === s.id; }); });
       renderStaged();
       renderReviews();
-      setNote(els.addNote, cappedShown ? CAPPED_TEXT : 'อัปโหลดแล้ว ตรวจข้อมูลด้านล่างแล้วกดบันทึก', cappedShown ? 'warn' : 'ok');
+      setNote(els.addNote, capped ? CAPPED_TEXT : 'อัปโหลดแล้ว ตรวจรายการด้านล่างแล้วกด "บันทึกทั้งหมด"', capped ? 'warn' : 'ok');
     }, function (err) {
       var done = state.reviews.length;
       state.staged = state.staged.filter(function (s) { return !state.reviews.some(function (r) { return r.id === s.id; }); });
@@ -2021,29 +2172,21 @@
       els.uploadBtn.disabled = !state.staged.length;
     });
   }
-  // Calls file.read for one review card and fills its fields. Resolves true when the daily AI cap is hit.
+  // Calls file.read for one review row and fills its fields. Never rejects.
   function readWithAi(r) {
     return api(fileReadBody(r.path)).then(function (data) {
-      var res = readResult(data);
-      r.read = true;
-      if (res.capped) { r.aiNote = CAPPED_TEXT; return true; }
-      r.text = res.text;
-      if (r.kind === 'cert') { r.certNo = res.certNo; r.validUntil = res.validUntil; }
-      if (!r.title && res.productName) r.aiNote = 'AI อ่านชื่อสินค้าได้: ' + res.productName;
-      return false;
+      applyPatch(r, readPatch(r, readResult(data)));
     }, function (err) {
-      r.read = true;
-      r.aiNote = 'AI อ่านไม่สำเร็จ (' + failText(err) + ') กรอกเองได้';
-      return false;
+      applyPatch(r, readFailPatch(r, failText(err)));
     });
   }
 
   function renderReviews() {
     clear(els.reviews);
-    state.reviews.forEach(function (r) {
-      if (r.saved) return;
-      els.reviews.appendChild(makeReview(r));
-    });
+    var list = rowsToSave(state.reviews);
+    list.forEach(function (r) { els.reviews.appendChild(makeReview(r)); });
+    els.reviewBar.hidden = !list.length;
+    els.saveAll.textContent = list.length > 1 ? 'บันทึกทั้งหมด (' + list.length + ' รูป)' : 'บันทึกทั้งหมด';
   }
   function makeReview(r) {
     var card = el('div', 'review');
@@ -2061,6 +2204,7 @@
     var kindSel = add(form, 'select', 'input');
     kindSel.id = idp + 'kind';
     fillKindSelect(kindSel, r.kind);
+    var pickNote = add(form, 'p', 'note warn', 'AI ยังเลือกประเภทให้ไม่ได้ กรุณาเลือกเอง');
     add(form, 'label', 'lbl', 'ชื่อไฟล์ (ไม่ใส่ ระบบใช้ชื่อประเภท)').setAttribute('for', idp + 'title');
     var titleIn = add(form, 'input', 'input');
     titleIn.id = idp + 'title';
@@ -2086,43 +2230,60 @@
     function sync() {
       r.kind = kindSel.value; r.title = titleIn.value; r.text = textIn.value; r.certNo = noIn.value; r.validUntil = dateIn.value;
       certBox.hidden = r.kind !== 'cert';
+      pickNote.hidden = !r.needsPick;
     }
-    [kindSel, titleIn, textIn, noIn, dateIn].forEach(function (n) { n.addEventListener('input', sync); n.addEventListener('change', sync); });
+    kindSel.addEventListener('change', function () { r.needsPick = false; sync(); });
+    [titleIn, textIn, noIn, dateIn].forEach(function (n) { n.addEventListener('input', sync); });
     sync();
     if (r.aiNote) add(form, 'p', 'note ' + (r.aiNote === CAPPED_TEXT ? 'warn' : ''), r.aiNote);
     add(form, 'p', 'note', !r.codes.length ? 'ยังไม่แสดงให้สาขา จนกว่าจะใส่รหัสให้รายการนี้' : (r.codes.length > 1 ? 'จะใช้กับ ' + r.codes.length + ' รหัส: ' + r.codes.join(', ') : 'จะใช้กับรหัส ' + r.codes[0]));
+    if (r.error) add(form, 'p', 'note review-err', r.error);
     var actions = add(form, 'div', 'actions');
-    var save = add(actions, 'button', 'btn', 'บันทึกรูปนี้');
-    save.type = 'button';
     var drop = add(actions, 'button', 'btn alt', 'ไม่เก็บรูปนี้');
     drop.type = 'button';
-    var note = add(form, 'p', 'note', '');
-    note.setAttribute('role', 'status');
-    save.addEventListener('click', function () {
-      sync();
-      if (isIsoDate(r.validUntil) === false && r.validUntil) { setNote(note, 'วันที่ไม่ถูกต้อง', 'err'); return; }
-      if (normalizeText(r.text).trim().length > NOTE_MAX) { setNote(note, 'ข้อความยาวเกิน ' + formatInt(NOTE_MAX) + ' ตัวอักษร', 'err'); return; }
-      if (state.busy) return;
-      state.busy = true;
-      save.disabled = true;
-      setNote(note, 'กำลังบันทึก...', '');
-      api(fileAddPictureBody(r.target, r)).then(function () {
-        r.saved = true;
-        renderReviews();
-        return reloadItem().then(function () { loadLog(true); setNote(els.addNote, 'บันทึกแล้ว', 'ok'); });
-      }, function (err) {
-        save.disabled = false;
-        setNote(note, failText(err), 'err');
-      }).then(function () { state.busy = false; });
-    });
     drop.addEventListener('click', function () {
+      if (state.busy) return;
       confirmBox('ไม่เก็บรูปนี้', 'รูปที่อัปโหลดแล้วจะไม่ถูกผูกกับรหัสใด', 'ไม่เก็บ', true).then(function (ok) {
         if (!ok) return;
-        r.saved = true;
+        r.dropped = true;
         renderReviews();
       });
     });
     return card;
+  }
+
+  // Save every row still listed, one file.add at a time. Failed rows stay listed with their error.
+  function saveAllRows() {
+    if (state.busy) return;
+    var chk = saveAllCheck(state.reviews);
+    if (!chk.ok) { setNote(els.saveAllNote, chk.text, 'err'); return; }
+    var list = rowsToSave(state.reviews);
+    var saved = 0;
+    var failed = 0;
+    state.busy = true;
+    els.saveAll.disabled = true;
+    eachSeq(list, function (r, i) {
+      r.error = '';
+      var problem = rowProblem(r);
+      if (problem) { r.error = problem; failed++; return null; }
+      setNote(els.saveAllNote, saveProgressText(i + 1, list.length), '');
+      return api(fileAddPictureBody(r.target, r)).then(function () {
+        r.saved = true;
+        saved++;
+      }, function (err) {
+        r.error = failText(err);
+        failed++;
+      });
+    }).then(function () {
+      renderReviews();
+      var sum = saveSummary(saved, failed);
+      setNote(els.saveAllNote, sum.text, sum.tone);
+      if (!saved) return null;
+      return reloadItem().then(function () { loadLog(true); });
+    }).then(function () {
+      state.busy = false;
+      els.saveAll.disabled = false;
+    });
   }
 
   // ---------- Text Note ----------
@@ -2211,6 +2372,15 @@
     });
   }
 
+  // ---------- Item Master version line ----------
+  function loadNavInfo() {
+    api({ action: 'nav.info' }).then(function (data) {
+      var text = navLineText(navInfoOf(data));
+      els.navLine.textContent = text;
+      els.navLine.hidden = !text;
+    }, function () { els.navLine.hidden = true; });
+  }
+
   // ---------- start ----------
   function startPage() {
     var stored = loadStored();
@@ -2225,7 +2395,10 @@
     els.who.textContent = (staff.n || '') + (staff.un ? ' · ' + staff.un : '');
     els.app.hidden = false;
     els.trashPanel.hidden = stored.isAdmin !== true;
-    fillKindSelect(els.addKind, 'photo');
+    fillAddKind(els.addKind);
+    syncAiBox();
+    kindHelpLines().forEach(function (line) { add(els.kindHelpList, 'li', '', line); });
+    loadNavInfo();
     fillKindSelect(els.noteKind, 'spec');
     addPicker = createPicker(els.addCodes, 'addCodesSearch');
     notePicker = createPicker(els.noteCodes, 'noteCodesSearch');
@@ -2265,6 +2438,8 @@
     addFiles(pics);
   });
   els.uploadBtn.addEventListener('click', runUpload);
+  els.saveAll.addEventListener('click', saveAllRows);
+  els.addKind.addEventListener('change', syncAiBox);
   els.clearStaged.addEventListener('click', function () {
     state.staged.forEach(function (s) { try { URL.revokeObjectURL(s.previewUrl); } catch (e) { /* ignore */ } });
     state.staged = [];

@@ -209,6 +209,10 @@
   .sk.w30 { width: 30%; height: var(--space-5); } .sk.w70 { width: 70%; } .sk.w50 { width: 50%; }
   @keyframes shimmer { from { background-position: 200% 0; } to { background-position: -200% 0; } }
 
+  .navline { max-width: var(--max-wide); margin: 0 auto; padding: 0 var(--space-4) var(--space-4); text-align: right; font-size: var(--fs-xs); color: var(--c-ink-3); }
+  @media (min-width: 900px) {
+    .navline { position: fixed; right: var(--space-3); bottom: var(--space-2); margin: 0; padding: var(--space-1) var(--space-2); max-width: 45%; background: var(--c-surface); border-radius: var(--radius-s); }
+  }
   .foot { text-align: center; color: var(--c-ink-3); font-size: var(--fs-xs); margin-top: var(--space-5); }
 
   /* ---------- page image viewer ---------- */
@@ -324,6 +328,8 @@
   <div id="results"></div>
   <div class="foot">ข้อมูลจากเอกสารสินค้าของบริษัทเท่านั้น ถ้าไม่พบ หมายถึงยังไม่มีในเอกสาร ไม่ได้แปลว่าบริษัทไม่มีขาย</div>
 </main>
+
+<footer id="navLine" class="navline" role="status" hidden></footer>
 
 <div id="overlay" role="dialog" aria-modal="true" aria-labelledby="ovText">
   <div id="ovBar">
@@ -457,6 +463,44 @@
   }
   function kindLabel(kind) {
     return KIND_LABEL[kind] || KIND_LABEL.other;
+  }
+  function formatInt(n) {
+    var s = String(Math.floor(Math.abs(n)));
+    var out = '';
+    for (var i = 0; i < s.length; i++) {
+      if (i && (s.length - i) % 3 === 0) out += ',';
+      out += s.charAt(i);
+    }
+    return n < 0 ? '-' + out : out;
+  }
+  // Timestamp -> '20 ต.ค. 2569 14:05' in Bangkok time.
+  function thaiDateTime(ts) {
+    var ms = Date.parse(ts);
+    if (isNaN(ms)) return '';
+    var iso = new Date(ms + 7 * 3600 * 1000).toISOString();
+    return thaiDate(iso.slice(0, 10)) + ' ' + iso.slice(11, 16);
+  }
+  // search reply navInfo -> { version, syncedAt, count } or null (null hides the line).
+  function navInfoOf(data) {
+    var n = data && typeof data === 'object' ? data.navInfo : null;
+    if (!n || typeof n !== 'object') return null;
+    var c = n.count;
+    return {
+      version: typeof n.version === 'string' ? n.version.trim() : '',
+      syncedAt: typeof n.syncedAt === 'string' ? n.syncedAt : '',
+      count: c !== null && c !== undefined && c !== '' && Number(c) >= 0 ? Math.floor(Number(c)) : null
+    };
+  }
+  function navLineText(info) {
+    if (!info) return '';
+    var when = thaiDateTime(info.syncedAt);
+    var head = 'รายการสินค้า NAV: ';
+    if (!info.version && !when) return head + 'ยังไม่เคยอัปเดต';
+    var bits = [];
+    if (info.version) bits.push('รุ่น ' + info.version);
+    if (when) bits.push('อัปเดต ' + when);
+    if (info.count !== null) bits.push(formatInt(info.count) + ' รหัส');
+    return head + bits.join(' · ');
   }
   function kindOf(kind) {
     return KIND_ORDER.indexOf(kind) === -1 ? 'other' : kind;
@@ -643,6 +687,7 @@
     go: document.getElementById('goBtn'),
     chips: document.getElementById('chips'),
     status: document.getElementById('status'),
+    navLine: document.getElementById('navLine'),
     results: document.getElementById('results'),
     overlay: document.getElementById('overlay'),
     ovText: document.getElementById('ovText'),
@@ -1032,6 +1077,9 @@
       if (r.status === 200 && r.data) {
         hideMessage();
         renderResults(r.data);
+        var navText = navLineText(navInfoOf(r.data));
+        els.navLine.textContent = navText;
+        els.navLine.hidden = !navText;
       } else if (r.status === 401) {
         clearStored();
         showNoSearch(reasonMessage('expired'));

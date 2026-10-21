@@ -261,6 +261,7 @@
         <div class="p-head">
           <span id="pCode" class="code"></span>
           <span id="pMaster" class="master"></span>
+          <span id="pStatus" class="tag" hidden></span>
           <span id="pEdited" class="tag warn" hidden>แก้ไขแล้ว</span>
         </div>
         <div id="navNotice" class="banner" role="status" hidden>
@@ -997,6 +998,31 @@
   }
 
   // ---- Item Master version line ----
+  // NAV item status level (copy of supabase/functions/_shared/navstatus.ts statusLevel).
+  var NAV_STOP = ['BLOCKALL', 'BLOCKPOS', 'WH-DISCON', 'DISCON', 'DEMO', 'MOVE'];
+  var NAV_WARN = ['PREPARE', 'TEMP-OOS', 'SHORTAGE', 'SHORT-EXP', 'HOSPITAL', 'NO RETURN', 'BLOCK-PO'];
+  function statusLevel(code, blocked) {
+    if (blocked === true) return 'stop';
+    var c = String(code === null || code === undefined ? '' : code).trim().toUpperCase();
+    if (c === '' || c === 'NORMAL') return 'none';
+    if (NAV_STOP.indexOf(c) !== -1) return 'stop';
+    if (NAV_WARN.indexOf(c) !== -1) return 'warn';
+    return 'info';
+  }
+  // item.get master -> { level, tone, text } for the product header, or null when nothing to show.
+  function masterStatusView(master) {
+    if (!master || typeof master !== 'object') return null;
+    var blocked = master.blocked === true;
+    var level = statusLevel(master.status, blocked);
+    if (level === 'none') return null;
+    var label = String(master.statusDesc || '').trim() || String(master.status || '').trim();
+    if (blocked && statusLevel(master.status, false) === 'none') label = '';
+    var text = label;
+    if (level === 'stop') text = 'ขายไม่ได้' + (label ? ': ' + label : '');
+    if (blocked) text += label ? ' · Blocked ใน NAV' : ' (Blocked ใน NAV)';
+    if (!text) return null;
+    return { level: level, tone: level === 'stop' ? 'err' : (level === 'warn' ? 'warn' : ''), text: text };
+  }
   function navInfoOf(data) {
     if (!data || typeof data !== 'object') return null;
     var c = data.count;
@@ -1049,7 +1075,7 @@
   var els = {
     who: byId('who'), msg: byId('msg'), denied: byId('denied'), deniedText: byId('deniedText'), app: byId('app'),
     codeInput: byId('codeInput'), openBtn: byId('openBtn'), sugg: byId('sugg'), codeNote: byId('codeNote'),
-    product: byId('product'), pCode: byId('pCode'), pMaster: byId('pMaster'), pEdited: byId('pEdited'), pSource: byId('pSource'),
+    product: byId('product'), pCode: byId('pCode'), pMaster: byId('pMaster'), pEdited: byId('pEdited'), pStatus: byId('pStatus'), pSource: byId('pSource'),
     pName: byId('pName'), pDetails: byId('pDetails'), saveItem: byId('saveItem'), resetItem: byId('resetItem'), itemNote: byId('itemNote'),
     files: byId('files'), filesNote: byId('filesNote'),
     drop: byId('drop'), picker: byId('picker'), staged: byId('staged'), addKind: byId('addKind'), addCodes: byId('addCodes'),
@@ -1451,7 +1477,10 @@
     var src = '';
     if (item && item.documentTitle) src = 'จากเอกสาร: ' + item.documentTitle + (item.page ? ' หน้า ' + item.page : '');
     else if (!item) src = 'ยังไม่มีรายการสินค้านี้ในเอกสาร ถ้าบันทึกชื่อ ระบบจะสร้างรายการใหม่ในกลุ่ม "ข้อมูลที่จัดซื้อเพิ่มเอง"';
-    if (master && master.status) src += (src ? ' | ' : '') + 'สถานะในรายการสินค้ากลาง: ' + master.status;
+    var stView = masterStatusView(master);
+    els.pStatus.hidden = !stView;
+    els.pStatus.className = 'tag' + (stView && stView.tone ? ' ' + stView.tone : '');
+    els.pStatus.textContent = stView ? 'สถานะ NAV: ' + stView.text : '';
     els.pSource.textContent = src;
     state.initName = item ? String(item.name || '') : (master ? String(master.name || '') : '');
     state.initDetails = detailsToLines(item ? item.details : (master ? master.details : ''));

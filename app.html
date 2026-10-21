@@ -142,6 +142,10 @@
   .cert.ok { background: var(--c-ok-soft); color: var(--c-ok); border-color: var(--c-ok-line); }
   .cert.warn { background: var(--c-warn-soft); color: var(--c-warn); border-color: var(--c-warn-line); }
   .cert.err { background: var(--c-err-soft); color: var(--c-err); border-color: var(--c-err-line); }
+  .navtag {
+    font-size: var(--fs-xs); color: var(--c-ink-2); background: var(--c-surface-2); border: 1px solid var(--c-line);
+    border-radius: var(--radius-pill); padding: var(--space-0) var(--space-2);
+  }
   .docs { display: flex; flex-wrap: wrap; gap: var(--space-2); margin-top: var(--space-3); }
   .doc {
     display: inline-flex; align-items: center; gap: var(--space-2); min-height: var(--size-target);
@@ -560,6 +564,34 @@
       detail: parts.join(' · '),
       note: cert.status === 'expired' ? 'โปรดขอใบใหม่ก่อนแจ้งลูกค้า' : ''
     };
+  }
+  // NAV item status level (copy of supabase/functions/_shared/navstatus.ts statusLevel).
+  var NAV_STOP = ['BLOCKALL', 'BLOCKPOS', 'WH-DISCON', 'DISCON', 'DEMO', 'MOVE'];
+  var NAV_WARN = ['PREPARE', 'TEMP-OOS', 'SHORTAGE', 'SHORT-EXP', 'HOSPITAL', 'NO RETURN', 'BLOCK-PO'];
+  function statusLevel(code, blocked) {
+    if (blocked === true) return 'stop';
+    var c = String(code === null || code === undefined ? '' : code).trim().toUpperCase();
+    if (c === '' || c === 'NORMAL') return 'none';
+    if (NAV_STOP.indexOf(c) !== -1) return 'stop';
+    if (NAV_WARN.indexOf(c) !== -1) return 'warn';
+    return 'info';
+  }
+  // search item navStatus -> { level, tone, text } or null. stop = red banner, warn = amber banner, info = small tag.
+  function navStatusView(ns) {
+    if (!ns || typeof ns !== 'object') return null;
+    var blocked = ns.blocked === true;
+    var level = statusLevel(ns.code, blocked);
+    if (level === 'none') return null;
+    var label = String(ns.desc || '').trim() || String(ns.code || '').trim();
+    // Blocked with a NORMAL status: the status text ('ปกติ') would read as a contradiction.
+    if (blocked && statusLevel(ns.code, false) === 'none') label = '';
+    if (level === 'stop') {
+      var t = 'สินค้านี้ขายไม่ได้' + (label ? ': ' + label : '');
+      if (blocked) t += label ? ' · Blocked ใน NAV' : ' (Blocked ใน NAV)';
+      return { level: 'stop', tone: 'err', text: t };
+    }
+    if (!label) return null;
+    return { level: level, tone: level === 'warn' ? 'warn' : '', text: label };
   }
   // A Text Note entry has text and no picture: the viewer shows it as plain text.
   function isTextEntry(e) {
@@ -982,6 +1014,8 @@
       var code = String(it.code);
       addText(head, 'span', 'code', code);
       if (inAnswer) addText(head, 'span', 'in-answer', 'อยู่ในคำตอบ');
+      var navView = navStatusView(it.navStatus);
+      if (navView && navView.level === 'info') addText(head, 'span', 'navtag', navView.text);
       var cp = addText(head, 'button', 'copy', 'คัดลอกรหัส');
       cp.type = 'button';
       cp.addEventListener('click', function () { copyCode(code, cp); });
@@ -1021,6 +1055,15 @@
         dup.appendChild(icon('alert'));
         addText(dup, 'span', '', 'รหัสนี้พบมากกว่า 1 รายการในเอกสาร โปรดตรวจสอบ');
         card.appendChild(dup);
+      }
+      if (navView && navView.level !== 'info') {
+        var nb = document.createElement('div');
+        nb.className = 'cert ' + navView.tone;
+        addText(nb, 'span', 'cert-dot', '');
+        var nbText = document.createElement('div');
+        addText(nbText, 'b', '', navView.text);
+        nb.appendChild(nbText);
+        card.appendChild(nb);
       }
       var banner = certBanner(it.cert);
       if (banner) {

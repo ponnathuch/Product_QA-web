@@ -147,7 +147,7 @@ body {
   line-height: 1.55;
   -webkit-text-size-adjust: 100%;
 }
-button, input, select { font-family: inherit; } /* ds-allow-hardcode: inherit, not a literal */
+button, input, select, textarea { font-family: inherit; } /* ds-allow-hardcode: inherit, not a literal */
 [hidden] { display: none !important; }
 
 /* ---------- focus ---------- */
@@ -155,7 +155,7 @@ button:focus-visible, a:focus-visible, summary:focus-visible, [tabindex]:focus-v
   outline: var(--outline-w) solid var(--c-brand);
   outline-offset: var(--outline-w);
 }
-input:focus-visible, select:focus-visible {
+input:focus-visible, select:focus-visible, textarea:focus-visible {
   outline: var(--outline-w) solid transparent; /* keeps a visible edge in forced-colours mode */
   border-color: var(--c-brand);
   box-shadow: var(--focus);
@@ -208,7 +208,7 @@ input:focus-visible, select:focus-visible {
 .btn.alt:hover { background: var(--c-brand-soft); border-color: var(--c-brand); }
 
 /* ---------- inputs ---------- */
-.input, .filters input, .filters select, .form-grid input, .form-grid select {
+.input, .filters input, .filters select, .form-grid input, .form-grid select, textarea.input {
   min-height: var(--size-target); padding: var(--space-2) var(--space-3);
   border: 1px solid var(--c-line-strong); border-radius: var(--radius-m);
   background: var(--c-surface); color: var(--c-ink); font-size: var(--fs-m);

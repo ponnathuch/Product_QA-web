@@ -1,0 +1,2289 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>จัดการเอกสารสินค้า</title>
+<link rel="stylesheet" href="pqa-theme.css?v=1">
+<style>
+  /* Page layout only. Colours, fonts, radii, spacing and focus come from pqa-theme.css tokens. */
+  .top-inner { max-width: var(--max-wide); flex-wrap: wrap; }
+  #who { font-size: var(--fs-s); max-width: 40%; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  #who:empty { display: none; }
+
+  main { max-width: var(--max-wide); margin: calc(var(--space-6) * -1 - var(--space-3)) auto 0; padding: 0 var(--space-4) calc(var(--space-6) + var(--space-2)); }
+  .panel { margin-bottom: var(--space-3); }
+  .panel h2 { font-size: var(--fs-l); margin: 0 0 var(--space-3); color: var(--c-brand-strong); }
+  .panel h3 { font-size: var(--fs-m); margin: var(--space-4) 0 var(--space-2); color: var(--c-ink-2); }
+  #msg { display: flex; gap: var(--space-3); align-items: flex-start; }
+  #msg.error { color: var(--c-err); font-weight: bold; }
+  #msg.info { color: var(--c-ink-2); }
+  #denied a { color: var(--c-brand-strong); font-weight: bold; }
+
+  .note { font-size: var(--fs-s); color: var(--c-ink-3); margin: var(--space-2) 0 0; }
+  .note.err { color: var(--c-err); font-weight: bold; }
+  .note.ok { color: var(--c-ok); }
+  .note.warn { color: var(--c-warn); }
+  label.lbl { display: block; font-size: var(--fs-s); color: var(--c-ink-2); margin: var(--space-3) 0 var(--space-1); font-weight: bold; }
+  .row { display: flex; flex-wrap: wrap; gap: var(--space-3); align-items: flex-end; }
+  .row > .grow { flex: 1; min-width: var(--size-field); }
+  .input { width: 100%; }
+  textarea.input { display: block; resize: vertical; line-height: 1.5; }
+  .actions { display: flex; flex-wrap: wrap; gap: var(--space-2); margin-top: var(--space-3); align-items: center; }
+  .btn.small { font-size: var(--fs-s); padding: var(--space-1) var(--space-3); }
+  .btn.danger { background: var(--c-surface); color: var(--c-err); border-color: var(--c-err-line); }
+  .btn.danger:hover { background: var(--c-err-soft); border-color: var(--c-err); }
+
+  /* ---------- code box and Item Master suggestions ---------- */
+  #codeInput { font-family: var(--font-code); font-size: var(--fs-l); letter-spacing: 0.08em; min-height: var(--size-target-lg); }
+  #sugg { list-style: none; margin: var(--space-2) 0 0; padding: 0; border: 1px solid var(--c-line); border-radius: var(--radius-m); background: var(--c-surface); }
+  #sugg li + li { border-top: 1px solid var(--c-line); }
+  .sugg-btn {
+    display: flex; gap: var(--space-3); width: 100%; min-height: var(--size-target); align-items: baseline; text-align: left;
+    border: 0; background: transparent; color: var(--c-ink); padding: var(--space-2) var(--space-3); font-size: var(--fs-s); cursor: pointer;
+  }
+  .sugg-btn:hover { background: var(--c-brand-soft); }
+  .sugg-code { font-family: var(--font-code); font-weight: bold; color: var(--c-brand-strong); flex: 0 0 auto; }
+  .sugg-name { flex: 1; min-width: 0; }
+
+  /* ---------- product header ---------- */
+  .p-head { display: flex; flex-wrap: wrap; gap: var(--space-3); align-items: center; }
+  .code {
+    font-family: var(--font-code); font-size: var(--fs-xl); font-weight: bold; letter-spacing: 0.1em;
+    color: var(--c-brand-strong); background: var(--c-brand-soft); border-radius: var(--radius-s); padding: var(--space-0) var(--space-3);
+  }
+  .master { font-size: var(--fs-m); color: var(--c-ink); font-weight: bold; }
+  .master.none { color: var(--c-warn); }
+  .tag {
+    font-size: var(--fs-xs); font-weight: bold; border-radius: var(--radius-pill); padding: var(--space-0) var(--space-2);
+    color: var(--c-brand-strong); background: var(--c-brand-soft);
+  }
+  .tag.ok { color: var(--c-ok); background: var(--c-ok-soft); }
+  .tag.warn { color: var(--c-warn); background: var(--c-warn-soft); }
+  .tag.err { color: var(--c-err); background: var(--c-err-soft); }
+
+  /* ---------- file grid ---------- */
+  .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(var(--size-field), 1fr)); gap: var(--space-3); }
+  .file {
+    display: flex; flex-direction: column; gap: var(--space-2);
+    border: 1px solid var(--c-line); border-radius: var(--radius-m); background: var(--c-surface-2); padding: var(--space-3);
+  }
+  .file-top { display: flex; gap: var(--space-3); align-items: flex-start; }
+  .file-img {
+    flex: 0 0 var(--size-thumb); width: var(--size-thumb); height: var(--size-thumb);
+    border: 1px solid var(--c-line); border-radius: var(--radius-s); background: var(--c-img-backing); overflow: hidden;
+    display: flex; align-items: center; justify-content: center; color: var(--c-ink-3); font-size: var(--fs-xs); text-align: center;
+  }
+  .file-img img { display: block; width: 100%; height: 100%; object-fit: contain; }
+  .file-img.text { align-items: flex-start; justify-content: flex-start; padding: var(--space-1); text-align: left; overflow: hidden; background: var(--c-surface); }
+  .file-main { flex: 1; min-width: 0; }
+  .file-title { font-weight: bold; font-size: var(--fs-s); word-break: break-word; margin: 0 0 var(--space-1); }
+  .tags { display: flex; flex-wrap: wrap; gap: var(--space-1); }
+  .file-btns { display: flex; flex-wrap: wrap; gap: var(--space-2); }
+  .empty { color: var(--c-ink-3); font-size: var(--fs-s); }
+
+  /* ---------- add panel ---------- */
+  .drop {
+    display: block; width: 100%; border: var(--outline-w) dashed var(--c-line-strong); border-radius: var(--radius-m); background: var(--c-surface-2);
+    color: var(--c-ink-2); padding: var(--space-5) var(--space-4); text-align: center; font-size: var(--fs-s); cursor: pointer;
+  }
+  .drop:hover, .drop.over { border-color: var(--c-brand); background: var(--c-brand-soft); color: var(--c-brand-strong); }
+  .staged { display: flex; flex-wrap: wrap; gap: var(--space-2); margin-top: var(--space-3); }
+  .stage {
+    position: relative; width: var(--size-strip-w); height: var(--size-strip-h); border: 1px solid var(--c-line); border-radius: var(--radius-s);
+    background: var(--c-img-backing); overflow: hidden;
+  }
+  .stage img { display: block; width: 100%; height: 100%; object-fit: cover; }
+  .stage button {
+    position: absolute; top: 0; right: 0; min-width: var(--size-icon-l); min-height: var(--size-icon-l); padding: 0; border: 0;
+    border-radius: 0 0 0 var(--radius-s); background: var(--c-scrim-bar); color: var(--c-scrim-ink); cursor: pointer; font-size: var(--fs-s); line-height: 1;
+  }
+  .review { border: 1px solid var(--c-brand-line); border-radius: var(--radius-m); background: var(--c-surface-2); padding: var(--space-3); margin-top: var(--space-3); }
+  .review-top { display: flex; gap: var(--space-3); align-items: flex-start; }
+  .review-img { flex: 0 0 var(--size-tile); width: var(--size-tile); border: 1px solid var(--c-line); border-radius: var(--radius-s); background: var(--c-img-backing); overflow: hidden; }
+  .review-img img { display: block; width: 100%; height: auto; }
+  .review-form { flex: 1; min-width: 0; }
+  .counter { font-size: var(--fs-xs); color: var(--c-ink-3); margin-top: var(--space-1); text-align: right; }
+  .counter.warn { color: var(--c-warn); }
+  .counter.err { color: var(--c-err); font-weight: bold; }
+
+  /* ---------- log and trash ---------- */
+  .list { list-style: none; margin: 0; padding: 0; }
+  .list li { padding: var(--space-2) 0; border-bottom: 1px solid var(--c-line); font-size: var(--fs-s); }
+  .list li:last-child { border-bottom: 0; }
+  .list .when { color: var(--c-ink-3); font-size: var(--fs-xs); }
+  .list .who { font-weight: bold; }
+  .list .sum { color: var(--c-ink-2); word-break: break-word; }
+  .trash-row { display: flex; gap: var(--space-3); align-items: center; justify-content: space-between; flex-wrap: wrap; }
+
+  /* ---------- confirm and edit dialogs ---------- */
+  #scrim { display: none; position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: var(--c-scrim); z-index: 10; overflow: auto; padding: var(--space-4); }
+  #scrim.open { display: block; }
+  .modal {
+    max-width: var(--max-narrow); margin: var(--space-5) auto; background: var(--c-surface); color: var(--c-ink);
+    border: 1px solid var(--c-line-strong); border-radius: var(--radius-l); padding: var(--space-4);
+  }
+  .modal h2 { font-size: var(--fs-l); margin: 0 0 var(--space-3); color: var(--c-brand-strong); }
+  .modal p { margin: 0 0 var(--space-2); word-break: break-word; }
+  .modal-err { color: var(--c-err); font-weight: bold; font-size: var(--fs-s); margin-top: var(--space-3); }
+  .modal-actions { display: flex; flex-wrap: wrap; gap: var(--space-2); justify-content: flex-end; margin-top: var(--space-4); }
+  #scrim :focus-visible { outline-color: var(--c-brand); }
+
+  /* ---------- code picker ---------- */
+  .picker-bar { display: flex; flex-wrap: wrap; gap: var(--space-2); align-items: center; margin-top: var(--space-2); }
+  .picker-results { list-style: none; margin: var(--space-2) 0 0; padding: 0; max-height: calc(var(--size-tile) * 2); overflow: auto; border: 1px solid var(--c-line); border-radius: var(--radius-m); background: var(--c-surface); }
+  .picker-results li + li { border-top: 1px solid var(--c-line); }
+  .pick-row { display: flex; gap: var(--space-3); align-items: center; min-height: var(--size-target); padding: var(--space-1) var(--space-3); font-size: var(--fs-s); cursor: pointer; }
+  .pick-row:hover { background: var(--c-brand-soft); }
+  .pick-row input { flex: 0 0 auto; width: var(--size-icon-s); height: var(--size-icon-s); }
+  .pick-name { flex: 1; min-width: 0; word-break: break-word; }
+  .chips { display: flex; flex-wrap: wrap; gap: var(--space-2); margin-top: var(--space-2); }
+  .chip {
+    display: inline-flex; align-items: center; gap: var(--space-1); font-family: var(--font-code); font-size: var(--fs-s);
+    color: var(--c-brand-strong); background: var(--c-brand-soft); border: 1px solid var(--c-brand-line); border-radius: var(--radius-pill); padding: var(--space-0) var(--space-1) var(--space-0) var(--space-3);
+  }
+  .chip button { min-width: var(--size-icon-l); min-height: var(--size-icon-l); padding: 0; border: 0; border-radius: var(--radius-pill); background: transparent; color: var(--c-brand-strong); cursor: pointer; font-size: var(--fs-s); line-height: 1; }
+  .chip button:hover { background: var(--c-brand-line); }
+
+  /* ---------- review tabs, drafts, NAV notice ---------- */
+  .tabs { display: flex; flex-wrap: wrap; gap: var(--space-2); margin-bottom: var(--space-3); }
+  .tab { border: 1px solid var(--c-line-strong); border-radius: var(--radius-pill); background: var(--c-surface); color: var(--c-ink-2); min-height: var(--size-target); padding: var(--space-1) var(--space-4); font-size: var(--fs-s); cursor: pointer; }
+  .tab:hover { background: var(--c-brand-soft); }
+  .tab[aria-selected="true"] { background: var(--c-brand-soft); border-color: var(--c-brand); color: var(--c-brand-strong); font-weight: bold; }
+  .rev-btn {
+    display: flex; flex-wrap: wrap; gap: var(--space-1) var(--space-3); width: 100%; min-height: var(--size-target); align-items: baseline; text-align: left;
+    border: 0; background: transparent; color: var(--c-ink); padding: var(--space-2) var(--space-1); font-size: var(--fs-s); cursor: pointer;
+  }
+  .rev-btn:hover { background: var(--c-brand-soft); }
+  .rev-name { flex: 1; min-width: var(--size-field); word-break: break-word; }
+  .rev-meta { color: var(--c-ink-3); font-size: var(--fs-xs); }
+  .pager { display: flex; flex-wrap: wrap; gap: var(--space-2); align-items: center; margin-top: var(--space-3); }
+  .banner { display: flex; flex-wrap: wrap; gap: var(--space-3); align-items: center; margin-top: var(--space-3); padding: var(--space-3); border: 1px solid var(--c-warn-line); border-radius: var(--radius-m); background: var(--c-warn-soft); color: var(--c-warn); font-weight: bold; font-size: var(--fs-s); }
+  .banner span { flex: 1; min-width: var(--size-field); word-break: break-word; }
+  .assign { margin-top: var(--space-3); padding: var(--space-3); border: 1px solid var(--c-brand-line); border-radius: var(--radius-m); background: var(--c-surface-2); }
+
+  @media (max-width: 520px) {
+    .top { padding: var(--space-3) var(--space-3) calc(var(--space-6) * 2 - var(--space-3)); }
+    .title p { display: none; }
+    #who { max-width: 100%; order: 3; flex: 1 1 100%; }
+    main { padding: 0 var(--space-3) var(--space-6); }
+    .review-top { flex-direction: column; }
+    .review-img { width: 100%; }
+    .btn { min-height: var(--size-target-lg); }
+  }
+</style>
+</head>
+<body>
+<header class="top">
+  <div class="top-inner">
+    <div class="logo" aria-hidden="true">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/><path d="M12 18v-6"/><path d="M9 15h6"/></svg>
+    </div>
+    <div class="title">
+      <h1>จัดการเอกสารสินค้า</h1>
+      <p>เพิ่ม แก้ไข และเอาเอกสารของรหัสสินค้าออก มีผลกับสาขาทันที</p>
+    </div>
+    <div id="who"></div>
+    <a id="backLink" class="top-link" href="app.html">กลับไปหน้าถามข้อมูลสินค้า</a>
+  </div>
+</header>
+
+<main>
+  <div id="msg" class="panel" role="status" hidden></div>
+
+  <div id="denied" class="panel" hidden>
+    <p id="deniedText"></p>
+    <p><a id="deniedLink" href="app.html">กลับไปหน้าถามข้อมูลสินค้า</a></p>
+  </div>
+
+  <div id="app" hidden>
+    <section class="panel" aria-labelledby="hCode">
+      <h2 id="hCode">รหัสสินค้า</h2>
+      <label class="lbl" for="codeInput">พิมพ์รหัส 7 หลัก หรือชื่อสินค้า</label>
+      <div class="row">
+        <div class="grow"><input type="text" id="codeInput" class="input" maxlength="100" autocomplete="off" inputmode="search" placeholder="เช่น 3001384 หรือ เตียงไฟฟ้า"></div>
+        <button type="button" id="openBtn" class="btn">เปิดรหัสนี้</button>
+      </div>
+      <ul id="sugg" hidden></ul>
+      <p id="codeNote" class="note" role="status" aria-live="polite"></p>
+    </section>
+
+    <section class="panel" aria-labelledby="hReview">
+      <h2 id="hReview">ตรวจรายการ</h2>
+      <div id="reviewTabs" class="tabs" role="tablist" aria-label="ตัวกรองรายการ"></div>
+      <ul id="reviewList" class="list"></ul>
+      <p id="reviewNote" class="note" role="status" aria-live="polite"></p>
+      <div class="pager">
+        <button type="button" id="reviewPrev" class="btn alt small" disabled>ก่อนหน้า</button>
+        <span id="reviewPage" class="note"></span>
+        <button type="button" id="reviewNext" class="btn alt small" disabled>ถัดไป</button>
+        <button type="button" id="newDraftBtn" class="btn small">เพิ่มสินค้าที่ยังไม่มีรหัส</button>
+      </div>
+    </section>
+
+    <div id="product" hidden>
+      <section class="panel" id="draftPanel" aria-labelledby="hDraft" hidden>
+        <h2 id="hDraft">สินค้าที่ยังไม่มีรหัส</h2>
+        <p class="note">สาขายังมองไม่เห็นรายการนี้ จนกว่าจะใส่รหัสให้</p>
+        <label class="lbl" for="draftLabel">ชื่อรายการ</label>
+        <input type="text" id="draftLabel" class="input" maxlength="200" autocomplete="off">
+        <label class="lbl" for="draftNote">บันทึกช่วยจำ</label>
+        <textarea id="draftNote" class="input" rows="3" maxlength="2000"></textarea>
+        <div class="actions">
+          <button type="button" id="saveDraft" class="btn">บันทึกรายการ</button>
+          <button type="button" id="assignOpen" class="btn alt">ใส่รหัสให้รายการนี้</button>
+          <button type="button" id="deleteDraft" class="btn danger">ลบรายการนี้</button>
+        </div>
+        <p id="draftNoteMsg" class="note" role="status" aria-live="polite"></p>
+        <div id="assignBox" class="assign" hidden>
+          <label class="lbl" for="assignCode">รหัสสินค้า 7 หลัก หรือชื่อสินค้า (ค้นจากรายการสินค้ากลาง)</label>
+          <input type="text" id="assignCode" class="input" maxlength="100" autocomplete="off" inputmode="search">
+          <ul id="assignSugg" hidden></ul>
+          <p id="assignInfo" class="note" role="status" aria-live="polite"></p>
+          <div class="actions">
+            <button type="button" id="assignConfirm" class="btn">ยืนยันใส่รหัส</button>
+            <button type="button" id="assignCancel" class="btn alt">ยกเลิก</button>
+          </div>
+        </div>
+      </section>
+
+      <section class="panel" id="itemPanel" aria-labelledby="hItem">
+        <h2 id="hItem">ข้อมูลสินค้า</h2>
+        <div class="p-head">
+          <span id="pCode" class="code"></span>
+          <span id="pMaster" class="master"></span>
+          <span id="pEdited" class="tag warn" hidden>แก้ไขแล้ว</span>
+        </div>
+        <div id="navNotice" class="banner" role="status" hidden>
+          <span id="navNoticeText"></span>
+          <button type="button" id="useNav" class="btn small">ใช้ชื่อจาก NAV</button>
+        </div>
+        <p id="pSource" class="note"></p>
+        <label class="lbl" for="pName">ชื่อสินค้า (ที่ใช้ตอบพนักงาน)</label>
+        <input type="text" id="pName" class="input" maxlength="200" autocomplete="off">
+        <label class="lbl" for="pDetails">รายละเอียด (แยกแต่ละข้อด้วย  |  )</label>
+        <textarea id="pDetails" class="input" rows="4" maxlength="2000"></textarea>
+        <div class="actions">
+          <button type="button" id="saveItem" class="btn">บันทึกชื่อและรายละเอียด</button>
+          <button type="button" id="resetItem" class="btn alt" hidden>กลับค่าเดิม</button>
+        </div>
+        <p id="itemNote" class="note" role="status" aria-live="polite"></p>
+      </section>
+
+      <section class="panel" aria-labelledby="hFiles">
+        <h2 id="hFiles">เอกสารและรูปของรหัสนี้</h2>
+        <div id="files"></div>
+        <p id="filesNote" class="note" role="status" aria-live="polite"></p>
+      </section>
+
+      <section class="panel" aria-labelledby="hAdd">
+        <h2 id="hAdd">เพิ่มรูป / เอกสาร</h2>
+        <button type="button" id="drop" class="drop">ลากรูปมาวางที่นี่ หรือกดเพื่อเลือกรูป (วางด้วย Ctrl+V ได้)</button>
+        <input type="file" id="picker" accept="image/*" multiple hidden>
+        <div id="staged" class="staged"></div>
+        <div class="row">
+          <div class="grow">
+            <label class="lbl" for="addKind">ประเภท</label>
+            <!-- ds-allow-native-select: native select keeps keyboard and screen-reader behaviour on old Edge 109 -->
+            <select id="addKind" class="input"></select>
+          </div>
+        </div>
+        <label class="lbl" for="addCodesSearch">ใช้กับรหัสอื่นด้วย (ไม่บังคับ ค้นหา หรือวางรายการรหัส)</label>
+        <div id="addCodes"></div>
+        <label class="lbl"><input type="checkbox" id="addAi" checked> ให้ AI อ่านข้อความจากรูป (เฉพาะประเภทที่ไม่ใช่รูปสินค้า)</label>
+        <div class="actions">
+          <button type="button" id="uploadBtn" class="btn" disabled>อัปโหลดรูปที่เลือก</button>
+          <button type="button" id="clearStaged" class="btn alt" hidden>ล้างรายการ</button>
+        </div>
+        <p id="addNote" class="note" role="status" aria-live="polite"></p>
+        <div id="reviews"></div>
+      </section>
+
+      <section class="panel" aria-labelledby="hNote">
+        <h2 id="hNote">เพิ่มข้อมูลสินค้า (ข้อความ)</h2>
+        <div class="row">
+          <div class="grow">
+            <label class="lbl" for="noteTitle">หัวข้อ</label>
+            <input type="text" id="noteTitle" class="input" maxlength="120" autocomplete="off" placeholder="ข้อมูลสินค้า">
+          </div>
+          <div class="grow">
+            <label class="lbl" for="noteKind">ประเภท</label>
+            <!-- ds-allow-native-select: native select keeps keyboard and screen-reader behaviour on old Edge 109 -->
+            <select id="noteKind" class="input"></select>
+          </div>
+        </div>
+        <label class="lbl" for="noteText">ข้อความ (วางจากไฟล์ Word หรือ PDF ได้ ระบบเก็บการขึ้นบรรทัดใหม่ไว้)</label>
+        <textarea id="noteText" class="input" rows="10"></textarea>
+        <div id="noteCounter" class="counter" aria-live="off"></div>
+        <label class="lbl" for="noteCodesSearch">ใช้กับรหัสอื่นด้วย (ไม่บังคับ ค้นหา หรือวางรายการรหัส)</label>
+        <div id="noteCodes"></div>
+        <div class="actions">
+          <button type="button" id="saveNote" class="btn">บันทึกข้อมูลสินค้า</button>
+        </div>
+        <p id="noteNote" class="note" role="status" aria-live="polite"></p>
+      </section>
+
+      <section class="panel" id="logPanel" aria-labelledby="hLog">
+        <h2 id="hLog">ประวัติการแก้ไข</h2>
+        <ul id="logList" class="list"></ul>
+        <div class="actions"><button type="button" id="logMore" class="btn alt small" hidden>ดูรายการก่อนหน้า</button></div>
+        <p id="logNote" class="note"></p>
+      </section>
+    </div>
+
+    <section class="panel" id="trashPanel" aria-labelledby="hTrash" hidden>
+      <h2 id="hTrash">ถังขยะ</h2>
+      <p class="note">ไฟล์ที่ลบแล้ว กู้คืนได้ (เฉพาะผู้ดูแล)</p>
+      <ul id="trashList" class="list"></ul>
+      <div class="actions">
+        <button type="button" id="trashLoad" class="btn alt small">แสดงถังขยะ</button>
+        <button type="button" id="trashMore" class="btn alt small" hidden>ดูหน้าถัดไป</button>
+      </div>
+      <p id="trashNote" class="note" role="status" aria-live="polite"></p>
+    </section>
+  </div>
+</main>
+
+<div id="scrim"></div>
+
+<script>
+(function () {
+  var SUPABASE_URL = 'https://zuyqwkjvjuwykrdhzhwq.supabase.co';
+  var TIMEOUT_MS = 30000;
+  var STORE_KEY = 'pqa.session';
+  var SVG_NS = 'http://www.w3.org/2000/svg';
+
+  // BEGIN PURE
+  var MAIN_MAX = 1600;
+  var THUMB_MAX = 360;
+  var QUALITY_MAIN = 0.85;
+  var QUALITY_THUMB = 0.8;
+  var NOTE_MAX = 20000;
+  var CODES_MAX = 50;
+  // The open code is one of the 50 File Links the server accepts, so the picker allows one fewer.
+  function pickMaxFor(primary) { return primary ? CODES_MAX - 1 : CODES_MAX; }
+  var UPLOAD_MAX = 20;
+  var PICK_LIMIT = 100;
+  var SUGGEST_LIMIT = 20;
+  var REVIEW_PAGE = 50;
+  var REVIEW_VIEWS = [
+    { id: 'not_in_nav', label: 'ยังไม่มีใน NAV', empty: 'ไม่มีรายการที่ยังไม่มีใน NAV' },
+    { id: 'nav_differs', label: 'NAV มีชื่อแล้ว (ชื่อต่าง)', empty: 'ไม่มีรายการที่ NAV มีชื่อต่างจากที่ตั้งไว้' },
+    { id: 'drafts', label: 'รอรหัส (ยังไม่มีรหัส)', empty: 'ยังไม่มีสินค้าที่รอรหัส' }
+  ];
+  var CAPPED_TEXT = 'AI อ่านครบโควตาวันนี้แล้ว บันทึกได้แต่ไม่มีข้อความอัตโนมัติ';
+  var DENIED_TEXT = 'หน้านี้สำหรับผู้เพิ่มเอกสารสินค้า';
+  var NO_SESSION_TEXT = 'กรุณาเปิดจากเมนู ถามข้อมูลสินค้า ใน Job Tracker';
+  var KIND_ORDER = ['photo', 'spec', 'shipping', 'promo', 'payment', 'cert', 'warranty', 'manual', 'letter', 'other'];
+  var KIND_LABEL = {
+    photo: 'รูปสินค้า', spec: 'รายละเอียด', shipping: 'ค่าขนส่ง', promo: 'โปรโมชัน',
+    payment: 'QR ชำระเงิน', cert: 'ใบรับรอง', warranty: 'ใบรับประกัน', manual: 'วิธีใช้',
+    letter: 'หนังสือ/บันทึก', other: 'เอกสาร'
+  };
+  var THAI_MONTHS = ['ม.ค.', 'ก.พ.', 'มี.ค.', 'เม.ย.', 'พ.ค.', 'มิ.ย.', 'ก.ค.', 'ส.ค.', 'ก.ย.', 'ต.ค.', 'พ.ย.', 'ธ.ค.'];
+  var ACTION_LABEL = {
+    'item.update': 'แก้ชื่อ/รายละเอียด', 'item.reset': 'กลับค่าเดิม', 'file.add': 'เพิ่มไฟล์', 'file.update': 'แก้ไขไฟล์',
+    'file.unlink': 'เอาออกจากรหัส', 'file.delete': 'ลบไฟล์', 'file.restore': 'กู้คืนไฟล์', 'file.read': 'AI อ่านเอกสาร',
+    'item.useNav': 'ใช้ชื่อจาก NAV', 'draft.create': 'เพิ่มรายการรอรหัส', 'draft.update': 'แก้รายการรอรหัส',
+    'draft.assign': 'ใส่รหัสให้รายการ', 'draft.delete': 'ลบรายการรอรหัส'
+  };
+
+  function kindOf(kind) { return KIND_ORDER.indexOf(kind) === -1 ? 'other' : kind; }
+  function kindLabel(kind) { return KIND_LABEL[kindOf(kind)]; }
+  function isCode(s) { return typeof s === 'string' && /^[0-9]{7}$/.test(s); }
+
+  // Resize target: scale down so the longer side is at most max; never scale up.
+  function fitSize(w, h, max) {
+    if (!(w > 0) || !(h > 0) || !(max > 0)) return { width: 0, height: 0 };
+    var scale = Math.min(1, max / Math.max(w, h));
+    return { width: Math.max(1, Math.round(w * scale)), height: Math.max(1, Math.round(h * scale)) };
+  }
+
+  // Split free text into 7-digit codes (deduplicated, order kept) and tokens that are not codes.
+  function parseCodes(text) {
+    var out = { codes: [], invalid: [], tooMany: false };
+    if (typeof text !== 'string') return out;
+    var parts = text.split(/[\s,;]+/);
+    for (var i = 0; i < parts.length; i++) {
+      var p = parts[i];
+      if (!p) continue;
+      if (isCode(p)) {
+        if (out.codes.indexOf(p) === -1) out.codes.push(p);
+      } else if (out.invalid.indexOf(p) === -1) {
+        out.invalid.push(p);
+      }
+    }
+    out.tooMany = out.codes.length > CODES_MAX;
+    return out;
+  }
+  // Primary code first, extras after it, no duplicates.
+  function mergeCodes(primary, extras) {
+    var out = [primary];
+    var list = Array.isArray(extras) ? extras : [];
+    for (var i = 0; i < list.length; i++) if (out.indexOf(list[i]) === -1) out.push(list[i]);
+    return out;
+  }
+  function extraCodes(primary, codes) {
+    var out = [];
+    var list = Array.isArray(codes) ? codes : [];
+    for (var i = 0; i < list.length; i++) if (list[i] !== primary && out.indexOf(list[i]) === -1) out.push(list[i]);
+    return out;
+  }
+  function codesCheckText(parsed, primary) {
+    if (parsed.invalid.length) return { tone: 'err', text: 'รหัสไม่ถูกต้อง (ต้องเป็นตัวเลข 7 หลัก): ' + parsed.invalid.join(', ') };
+    if (parsed.tooMany) return { tone: 'err', text: 'ใส่รหัสได้ไม่เกิน ' + CODES_MAX + ' รหัส' };
+    var n = extraCodes(primary, parsed.codes).length;
+    if (!n) return { tone: '', text: '' };
+    return { tone: 'ok', text: 'ใช้กับรหัสนี้และอีก ' + n + ' รหัส' };
+  }
+  function formatInt(n) {
+    var s = String(Math.floor(Math.abs(n)));
+    var out = '';
+    for (var i = 0; i < s.length; i++) {
+      if (i && (s.length - i) % 3 === 0) out += ',';
+      out += s.charAt(i);
+    }
+    return n < 0 ? '-' + out : out;
+  }
+  function counterText(n, max) {
+    return formatInt(n) + ' / ' + formatInt(max) + ' ตัวอักษร';
+  }
+  function counterTone(n, max) {
+    if (n > max) return 'err';
+    if (n >= Math.floor(max * 0.9)) return 'warn';
+    return '';
+  }
+  function normalizeText(s) {
+    return typeof s === 'string' ? s.replace(/\r\n?/g, String.fromCharCode(10)) : '';
+  }
+  // Text Note body check: 1..NOTE_MAX characters after trimming the ends.
+  function noteCheck(text) {
+    var t = normalizeText(text).trim();
+    if (!t) return { ok: false, text: 'กรุณาใส่ข้อความ' };
+    if (t.length > NOTE_MAX) return { ok: false, text: 'ข้อความยาวเกิน ' + formatInt(NOTE_MAX) + ' ตัวอักษร' };
+    return { ok: true, text: t };
+  }
+  function isIsoDate(s) {
+    var m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(typeof s === 'string' ? s : '');
+    if (!m) return false;
+    var d = new Date(Date.UTC(parseInt(m[1], 10), parseInt(m[2], 10) - 1, parseInt(m[3], 10)));
+    return d.toISOString().slice(0, 10) === s;
+  }
+  function bangkokToday(nowMs) {
+    return new Date(nowMs + 7 * 3600 * 1000).toISOString().slice(0, 10);
+  }
+  function daysUntil(iso, todayIso) {
+    return Math.round((Date.parse(iso + 'T00:00:00Z') - Date.parse(todayIso + 'T00:00:00Z')) / 86400000);
+  }
+  // Certificate Status: valid, expiring (60 days or fewer left) or expired.
+  function certStatus(validUntil, todayIso) {
+    if (!isIsoDate(validUntil) || !isIsoDate(todayIso)) return '';
+    var d = daysUntil(validUntil, todayIso);
+    if (d < 0) return 'expired';
+    if (d <= 60) return 'expiring';
+    return 'valid';
+  }
+  function certBadge(file, todayIso) {
+    if (!file || file.kind !== 'cert') return null;
+    var st = certStatus(file.validUntil, todayIso);
+    if (st === 'expired') return { tone: 'err', label: 'ใบรับรองหมดอายุแล้ว' };
+    if (st === 'expiring') return { tone: 'warn', label: 'ใกล้หมดอายุ' };
+    if (st === 'valid') return { tone: 'ok', label: 'ใช้ได้' };
+    return { tone: 'warn', label: 'ยังไม่ระบุวันหมดอายุ' };
+  }
+  function thaiDate(iso) {
+    var m = /^(\d{4})-(\d{2})-(\d{2})/.exec(typeof iso === 'string' ? iso : '');
+    if (!m) return '';
+    var month = parseInt(m[2], 10);
+    var day = parseInt(m[3], 10);
+    if (month < 1 || month > 12 || day < 1 || day > 31) return '';
+    return day + ' ' + THAI_MONTHS[month - 1] + ' ' + (parseInt(m[1], 10) + 543);
+  }
+  // Timestamp -> '20 ต.ค. 2569 14:05' in Bangkok time.
+  function thaiDateTime(ts) {
+    var ms = Date.parse(ts);
+    if (isNaN(ms)) return '';
+    var iso = new Date(ms + 7 * 3600 * 1000).toISOString();
+    return thaiDate(iso.slice(0, 10)) + ' ' + iso.slice(11, 16);
+  }
+  function codesLabel(n) { return 'ใช้กับ ' + n + ' รหัส'; }
+  function excerpt(text, max) {
+    var t = normalizeText(text).replace(/\s+/g, ' ').trim();
+    return t.length > max ? t.slice(0, max) + '...' : t;
+  }
+  function deleteAllMessage(title, count) {
+    return 'ลบ "' + title + '" จากทุกรหัส (' + count + ' รหัส) ไฟล์จะถูกย้ายไปถังขยะ และไม่แสดงให้พนักงานเห็นอีก';
+  }
+  function unlinkLastMessage(title, code) {
+    return '"' + title + '" ใช้กับรหัส ' + code + ' รหัสเดียว ถ้าเอาออกไฟล์จะถูกย้ายไปถังขยะ';
+  }
+  var LEAVE_TEXT = 'ยังมีข้อมูลที่ยังไม่ได้บันทึก ถ้าออกจากหน้านี้ข้อมูลจะหายไป';
+  // Thai message for an Edge Function error status.
+  function errorText(status) {
+    if (status === 400) return 'ข้อมูลไม่ถูกต้อง ตรวจสอบแล้วลองใหม่';
+    if (status === 401) return 'เซสชันหมดอายุ กรุณากดเมนู ถามข้อมูลสินค้า ใน Job Tracker อีกครั้ง';
+    if (status === 403) return 'คุณไม่มีสิทธิ์ทำรายการนี้';
+    if (status === 404) return 'ไม่พบข้อมูลนี้ (อาจถูกลบไปแล้ว)';
+    if (status === 409) return 'ข้อมูลเปลี่ยนไปแล้ว กรุณาเปิดรหัสนี้ใหม่แล้วลองอีกครั้ง';
+    if (status === 413) return 'ไฟล์ใหญ่เกินไป';
+    if (status === 0) return 'ติดต่อเซิร์ฟเวอร์ไม่ได้ ลองใหม่อีกครั้ง';
+    return 'ระบบขัดข้อง ลองใหม่อีกครั้ง';
+  }
+  function isSessionValid(stored, now) {
+    if (!stored || typeof stored !== 'object') return false;
+    if (typeof stored.session !== 'string' || !stored.session) return false;
+    if (typeof stored.expiresAt !== 'number') return false;
+    return stored.expiresAt > now;
+  }
+  function canManageOf(stored) {
+    return !!stored && stored.canManage === true;
+  }
+  // Signed Product File URL from this project's storage, or a same-origin relative path (dev preview only).
+  function isTrustedFileUrl(url, baseUrl) {
+    if (typeof url !== 'string' || !url) return false;
+    if (url.indexOf(baseUrl + '/storage/v1/object/sign/product-files/') === 0) return true;
+    return !/^[a-z][a-z0-9+.\-]*:/i.test(url) && url.indexOf('//') !== 0 && url.indexOf('..') === -1;
+  }
+  function isTrustedUploadUrl(url, baseUrl) {
+    if (typeof url !== 'string' || !url) return false;
+    if (url.indexOf(baseUrl + '/storage/v1/object/upload/sign/product-files/') === 0) return true;
+    return !/^[a-z][a-z0-9+.\-]*:/i.test(url) && url.indexOf('//') !== 0 && url.indexOf('..') === -1;
+  }
+  function rowsOf(data) {
+    if (Array.isArray(data)) return data;
+    if (data && typeof data === 'object') {
+      var keys = ['rows', 'items', 'uploads'];
+      for (var i = 0; i < keys.length; i++) if (Array.isArray(data[keys[i]])) return data[keys[i]];
+    }
+    return [];
+  }
+  // Group files by File Kind in KIND_ORDER: [{ kind, label, files }].
+  function groupByKind(files) {
+    var list = Array.isArray(files) ? files : [];
+    var out = [];
+    for (var k = 0; k < KIND_ORDER.length; k++) {
+      var g = [];
+      for (var i = 0; i < list.length; i++) if (kindOf(list[i].kind) === KIND_ORDER[k]) g.push(list[i]);
+      if (g.length) out.push({ kind: KIND_ORDER[k], label: KIND_LABEL[KIND_ORDER[k]], files: g });
+    }
+    return out;
+  }
+  // item.get file -> the fields the page uses; unknown kinds become 'other'.
+  function normalizeFile(f) {
+    if (!f || typeof f !== 'object') return null;
+    var kind = kindOf(f.kind);
+    return {
+      id: f.id,
+      kind: kind,
+      title: typeof f.title === 'string' && f.title ? f.title : KIND_LABEL[kind],
+      url: typeof f.url === 'string' ? f.url : null,
+      thumbUrl: typeof f.thumbUrl === 'string' ? f.thumbUrl : null,
+      text: typeof f.text === 'string' ? f.text : '',
+      certNo: typeof f.certNo === 'string' ? f.certNo : '',
+      validUntil: typeof f.validUntil === 'string' ? f.validUntil : '',
+      codes: Array.isArray(f.codes) ? f.codes.filter(isCode) : [],
+      createdBy: typeof f.createdBy === 'string' ? f.createdBy : '',
+      updatedAt: typeof f.updatedAt === 'string' ? f.updatedAt : ''
+    };
+  }
+  function normalizeFiles(files) {
+    var out = [];
+    var list = Array.isArray(files) ? files : [];
+    for (var i = 0; i < list.length; i++) {
+      var n = normalizeFile(list[i]);
+      if (n) out.push(n);
+    }
+    return out;
+  }
+  function isTextNote(f) { return !!f && !f.url && f.text !== ''; }
+
+  // Cert fields go only with kind cert; validUntil is 'YYYY-MM-DD' or null.
+  function certFields(kind, certNo, validUntil) {
+    if (kind !== 'cert') return {};
+    var out = {};
+    var no = typeof certNo === 'string' ? certNo.trim() : '';
+    out.certNo = no;
+    out.validUntil = isIsoDate(validUntil) ? validUntil : null;
+    return out;
+  }
+  function withCodes(body, primary, codes) {
+    var extras = extraCodes(primary, codes);
+    if (extras.length) body.codes = extras;
+    return body;
+  }
+  // A write target is a product code (string) or a Product Draft ({ draftId }).
+  function isDraftTarget(t) { return !!t && typeof t === 'object' && t.draftId > 0; }
+  function primaryOf(t) { return typeof t === 'string' ? t : ''; }
+  function withTarget(body, t) {
+    if (isDraftTarget(t)) body.draftId = t.draftId;
+    else body.code = String(t);
+    return body;
+  }
+  // Codes a new file is linked to: the primary code (when there is one) then the extras, no duplicates.
+  function linkCodes(primary, extras) {
+    if (primary) return mergeCodes(primary, extras);
+    return extraCodes('', extras).filter(isCode);
+  }
+  function itemGetBody(code) { return { action: 'item.get', code: code }; }
+  function itemUpdateBody(code, name, details) {
+    return { action: 'item.update', code: code, name: String(name).trim(), details: String(details).trim() };
+  }
+  function itemResetBody(code) { return { action: 'item.reset', code: code }; }
+  function uploadBeginBody(target, count) { return withTarget({ action: 'upload.begin', count: count }, target); }
+  function fileReadBody(path) { return { action: 'file.read', path: path }; }
+  // Picture: p = { kind, title, path, thumbPath, width, height, text, certNo, validUntil, codes }.
+  function fileAddPictureBody(target, p) {
+    var body = withTarget({ action: 'file.add', kind: kindOf(p.kind), path: p.path, thumbPath: p.thumbPath, width: p.width, height: p.height }, target);
+    var title = typeof p.title === 'string' ? p.title.trim() : '';
+    if (title) body.title = title;
+    var text = normalizeText(p.text).trim();
+    if (text) body.text = text;
+    var cf = certFields(body.kind, p.certNo, p.validUntil);
+    for (var k in cf) body[k] = cf[k];
+    return withCodes(body, primaryOf(target), p.codes);
+  }
+  // Text Note: n = { kind, title, text, certNo, validUntil, codes }.
+  function fileAddNoteBody(target, n) {
+    var body = withTarget({ action: 'file.add', kind: kindOf(n.kind), text: normalizeText(n.text).trim() }, target);
+    var title = typeof n.title === 'string' ? n.title.trim() : '';
+    if (title) body.title = title;
+    var cf = certFields(body.kind, n.certNo, n.validUntil);
+    for (var k in cf) body[k] = cf[k];
+    return withCodes(body, primaryOf(target), n.codes);
+  }
+  // u = { kind, title, text, certNo, validUntil, codes } with codes the FULL new set (null = leave the links alone).
+  function fileUpdateBody(id, u) {
+    var body = { action: 'file.update', id: id, kind: kindOf(u.kind), title: String(u.title).trim() };
+    if (typeof u.text === 'string') body.text = normalizeText(u.text).trim();
+    var cf = certFields(body.kind, u.certNo, u.validUntil);
+    for (var k in cf) body[k] = cf[k];
+    if (u.codes !== null) body.codes = Array.isArray(u.codes) ? u.codes.slice() : [];
+    return body;
+  }
+  function fileUnlinkBody(id, code) { return { action: 'file.unlink', id: id, code: code }; }
+  function fileDeleteBody(id) { return { action: 'file.delete', id: id }; }
+  function fileRestoreBody(id) { return { action: 'file.restore', id: id }; }
+  function trashListBody(page) { return { action: 'trash.list', page: page > 0 ? page : 1 }; }
+  function logListBody(code, page) {
+    var b = { action: 'log.list', page: page > 0 ? page : 1 };
+    if (isCode(code)) b.code = code;
+    return b;
+  }
+  function navSearchBody(q, limit) {
+    var b = { action: 'nav.search', q: String(q).trim() };
+    if (limit > 0) b.limit = Math.min(200, Math.floor(limit));
+    return b;
+  }
+  function itemUseNavBody(code) { return { action: 'item.useNav', code: code }; }
+  function reviewListBody(view, page) {
+    return { action: 'list.review', view: reviewViewOf(view).id, page: page > 0 ? Math.floor(page) : 1 };
+  }
+  function draftCreateBody(label, note) {
+    var b = { action: 'draft.create', label: String(label).trim() };
+    var n = normalizeText(note).trim();
+    if (n) b.note = n;
+    return b;
+  }
+  function draftGetBody(id) { return { action: 'draft.get', id: id }; }
+  function draftUpdateBody(id, u) {
+    return { action: 'draft.update', id: id, label: String(u.label).trim(), note: normalizeText(u.note).trim() };
+  }
+  function draftAssignBody(id, code) { return { action: 'draft.assign', id: id, code: code }; }
+  function draftDeleteBody(id) { return { action: 'draft.delete', id: id }; }
+
+  function reviewViewOf(id) {
+    for (var i = 0; i < REVIEW_VIEWS.length; i++) if (REVIEW_VIEWS[i].id === id) return REVIEW_VIEWS[i];
+    return REVIEW_VIEWS[0];
+  }
+  // list.review row -> { kind: 'code' | 'draft', code, draftId, name, files, updatedAt, updatedBy } or null.
+  function reviewRow(view, r) {
+    if (!r || typeof r !== 'object') return null;
+    var files = Array.isArray(r.files) ? r.files.length : (Number(r.files) > 0 ? Math.floor(Number(r.files)) : 0);
+    var base = {
+      name: typeof r.name === 'string' ? r.name : (typeof r.label === 'string' ? r.label : ''),
+      files: files,
+      updatedAt: typeof r.updatedAt === 'string' ? r.updatedAt : '',
+      updatedBy: typeof r.updatedBy === 'string' ? r.updatedBy : ''
+    };
+    var draftId = Number(r.draftId);
+    if (view === 'drafts' || (draftId > 0 && !isCode(String(r.code)))) {
+      if (!(draftId > 0)) return null;
+      base.kind = 'draft';
+      base.code = '';
+      base.draftId = Math.floor(draftId);
+      if (!base.name) base.name = 'รายการไม่มีชื่อ';
+      return base;
+    }
+    if (!isCode(String(r.code))) return null;
+    base.kind = 'code';
+    base.code = String(r.code);
+    base.draftId = 0;
+    return base;
+  }
+  function reviewRows(view, data) {
+    var out = [];
+    var rows = rowsOf(data);
+    for (var i = 0; i < rows.length; i++) {
+      var r = reviewRow(view, rows[i]);
+      if (r) out.push(r);
+    }
+    return out;
+  }
+  function reviewHasNext(data, page, count) {
+    if (data && typeof data === 'object' && typeof data.total === 'number') return page * REVIEW_PAGE < data.total;
+    return count >= REVIEW_PAGE;
+  }
+  function reviewMeta(row) {
+    var bits = [row.files + ' ไฟล์'];
+    var when = thaiDateTime(row.updatedAt);
+    if (when) bits.push('แก้ไขล่าสุด ' + when + (row.updatedBy ? ' โดย ' + row.updatedBy : ''));
+    return bits.join(' · ');
+  }
+  function reviewPageText(page, count) {
+    return 'หน้า ' + page + (count ? ' (' + count + ' รายการ)' : '');
+  }
+
+  // ---- code picker logic ----
+  // nav.search rows -> [{ code, name, inNav }]; inNav is false only when the reply says so.
+  function navRows(data) {
+    var out = [];
+    var rows = rowsOf(data);
+    for (var i = 0; i < rows.length; i++) {
+      var r = rows[i];
+      if (!r || typeof r !== 'object' || !isCode(String(r.code))) continue;
+      out.push({ code: String(r.code), name: typeof r.name === 'string' ? r.name : '', inNav: r.inNav !== false });
+    }
+    return out;
+  }
+  // Add codes to a selection: valid codes only, no duplicates, never the excluded (primary) code, never more than max.
+  function pickerAdd(selected, codes, max, exclude) {
+    var out = Array.isArray(selected) ? selected.slice() : [];
+    var res = { selected: out, added: 0, capped: 0, duplicate: 0 };
+    var list = Array.isArray(codes) ? codes : [];
+    for (var i = 0; i < list.length; i++) {
+      var c = list[i];
+      if (!isCode(c)) continue;
+      if (c === exclude || out.indexOf(c) !== -1) { res.duplicate++; continue; }
+      if (out.length >= max) { res.capped++; continue; }
+      out.push(c);
+      res.added++;
+    }
+    return res;
+  }
+  function rowCodes(rows) {
+    var out = [];
+    for (var i = 0; i < rows.length; i++) out.push(rows[i].code);
+    return out;
+  }
+  // 'เลือกทั้งหมด' for the rows shown: adds them in order until the cap.
+  function pickerSelectAll(selected, rows, max, exclude) { return pickerAdd(selected, rowCodes(rows), max, exclude); }
+  // 'ไม่เลือกทั้งหมด' for the rows shown: removes only those; codes picked from other searches stay.
+  function pickerSelectNone(selected, rows) {
+    var shown = rowCodes(rows);
+    return selected.filter(function (c) { return shown.indexOf(c) === -1; });
+  }
+  function pickerRemove(selected, code) { return selected.filter(function (c) { return c !== code; }); }
+  function pickerCounter(n, max) { return 'เลือกแล้ว ' + n + ' รหัส (สูงสุด ' + max + ')'; }
+  // Pasted or typed text that is a list of codes: handled when it has at least one code and no stray tokens
+  // (or at least two codes, so one typo in a long list does not lose the rest).
+  function pickerPaste(selected, text, max, exclude) {
+    var parsed = parseCodes(text);
+    var handled = parsed.codes.length > 0 && (parsed.invalid.length === 0 || parsed.codes.length >= 2);
+    if (!handled) return { handled: false, selected: selected.slice(), added: 0, capped: 0, duplicate: 0, invalid: parsed.invalid };
+    var r = pickerAdd(selected, parsed.codes, max, exclude);
+    r.handled = true;
+    r.invalid = parsed.invalid;
+    return r;
+  }
+  function pickerNote(r, max) {
+    var bits = [];
+    if (r.added) bits.push('เพิ่ม ' + r.added + ' รหัส');
+    if (r.capped) bits.push('เลือกได้สูงสุด ' + max + ' รหัส เพิ่มไม่ได้อีก ' + r.capped + ' รหัส');
+    if (r.invalid && r.invalid.length) bits.push('ข้ามที่ไม่ใช่รหัส 7 หลัก: ' + r.invalid.join(', '));
+    if (!bits.length && r.duplicate) bits.push('รหัสเหล่านี้เลือกไว้แล้ว');
+    return { tone: r.capped || (r.invalid && r.invalid.length) ? 'warn' : 'ok', text: bits.join(' · ') };
+  }
+
+  // ---- Product Draft and Item Master notice ----
+  function draftIdOf(data) {
+    if (!data || typeof data !== 'object') return 0;
+    var cands = [data.id, data.draftId, data.draft && data.draft.id];
+    for (var i = 0; i < cands.length; i++) if (Number(cands[i]) > 0) return Math.floor(Number(cands[i]));
+    return 0;
+  }
+  // draft.get reply (draft fields either under 'draft' or at the top) -> { id, label, note, files }.
+  function normalizeDraft(data) {
+    var d = data && typeof data === 'object' ? data : {};
+    var src = d.draft && typeof d.draft === 'object' ? d.draft : d;
+    return {
+      id: draftIdOf(d),
+      label: typeof src.label === 'string' ? src.label : '',
+      note: typeof src.note === 'string' ? src.note : '',
+      files: normalizeFiles(d.files)
+    };
+  }
+  function draftCheck(label) {
+    var t = typeof label === 'string' ? label.trim() : '';
+    if (!t) return { ok: false, text: 'กรุณาใส่ชื่อรายการ' };
+    if (t.length > 200) return { ok: false, text: 'ชื่อรายการยาวเกิน 200 ตัวอักษร' };
+    return { ok: true, text: t };
+  }
+  function navNowOf(data) {
+    var n = data && typeof data === 'object' ? data.navNow : null;
+    if (!n || typeof n !== 'object' || typeof n.name !== 'string' || !n.name) return null;
+    return { name: n.name, details: typeof n.details === 'string' ? n.details : '' };
+  }
+  function navNoticeText(n) { return 'ตอนนี้มีใน NAV แล้ว: ' + n.name; }
+  function useNavMessage(code, current, navName) {
+    return 'ชื่อและรายละเอียดของรหัส ' + code + ' จะเปลี่ยนจาก "' + current + '" เป็นข้อมูลจาก NAV ("' + navName + '")';
+  }
+  function deleteDraftMessage(label, files) {
+    return 'ลบรายการ "' + label + '" (มี ' + files + ' ไฟล์) สาขายังไม่เห็นรายการนี้อยู่แล้ว และรายการจะถูกย้ายออกจากรายการรอรหัส';
+  }
+  function deleteDraftFileMessage(title) {
+    return 'ลบ "' + title + '" ออกจากรายการนี้ ไฟล์จะถูกย้ายไปถังขยะ';
+  }
+  function assignMessage(label, code, navName) {
+    var name = navName ? 'ชื่อสินค้าตาม NAV: ' + navName : 'รหัสนี้ยังไม่มีใน NAV ระบบจะใช้ชื่อรายการนี้ ("' + label + '")';
+    return 'ใส่รหัส ' + code + ' ให้ "' + label + '" ไฟล์ทั้งหมดของรายการนี้จะแสดงให้สาขาเห็นทันที ' + name;
+  }
+  // Message under the assign box once the Item Master was searched for exactly this code.
+  function assignInfoText(code, rows, label) {
+    if (!isCode(code)) return { tone: '', text: '' };
+    for (var i = 0; i < rows.length; i++) {
+      if (rows[i].code === code && rows[i].inNav) return { tone: 'ok', text: 'ชื่อใน NAV: ' + rows[i].name };
+    }
+    return { tone: 'warn', text: 'รหัสนี้ยังไม่มีใน NAV ระบบจะใช้ชื่อรายการนี้ ("' + label + '")' };
+  }
+  function navNameOf(code, rows) {
+    for (var i = 0; i < rows.length; i++) if (rows[i].code === code && rows[i].inNav) return rows[i].name;
+    return '';
+  }
+  function codesTagText(n) { return n > 0 ? codesLabel(n) : 'ยังไม่แสดงให้สาขา'; }
+  // file.read reply -> form values, or { capped: true }.
+  function readResult(data) {
+    if (data && data.capped === true) return { capped: true, text: '', certNo: '', validUntil: '', productName: '' };
+    var d = data && typeof data === 'object' ? data : {};
+    return {
+      capped: false,
+      text: typeof d.text === 'string' ? d.text : '',
+      certNo: typeof d.certNo === 'string' ? d.certNo : '',
+      validUntil: isIsoDate(d.validUntil) ? d.validUntil : '',
+      productName: typeof d.productName === 'string' ? d.productName : ''
+    };
+  }
+  function actionLabel(a) { return ACTION_LABEL[a] || String(a || ''); }
+  function logSummary(row) {
+    if (!row || typeof row !== 'object') return '';
+    var b = row.before && typeof row.before === 'object' ? row.before : {};
+    var a = row.after && typeof row.after === 'object' ? row.after : {};
+    if (typeof a.name === 'string') {
+      return typeof b.name === 'string' && b.name !== a.name ? b.name + ' -> ' + a.name : a.name;
+    }
+    if (typeof a.title === 'string') return a.title;
+    if (typeof b.title === 'string') return b.title;
+    return '';
+  }
+  // END PURE
+
+  var ICONS = {
+    alert: [['path', 'M12 9v4'], ['path', 'M12 17h.01'], ['path', 'M10.3 3.9L1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z']],
+    info: [['circle', '12,12,10'], ['path', 'M12 16v-4'], ['path', 'M12 8h.01']]
+  };
+  function icon(name) {
+    var svg = document.createElementNS(SVG_NS, 'svg');
+    svg.setAttribute('viewBox', '0 0 24 24');
+    svg.setAttribute('fill', 'none');
+    svg.setAttribute('stroke', 'currentColor');
+    svg.setAttribute('stroke-width', '2');
+    svg.setAttribute('stroke-linecap', 'round');
+    svg.setAttribute('stroke-linejoin', 'round');
+    svg.setAttribute('aria-hidden', 'true');
+    ICONS[name].forEach(function (d) {
+      var el = document.createElementNS(SVG_NS, d[0]);
+      if (d[0] === 'circle') {
+        var c = d[1].split(',');
+        el.setAttribute('cx', c[0]); el.setAttribute('cy', c[1]); el.setAttribute('r', c[2]);
+      } else {
+        el.setAttribute('d', d[1]);
+      }
+      svg.appendChild(el);
+    });
+    return svg;
+  }
+
+  function byId(id) { return document.getElementById(id); }
+  var els = {
+    who: byId('who'), msg: byId('msg'), denied: byId('denied'), deniedText: byId('deniedText'), app: byId('app'),
+    codeInput: byId('codeInput'), openBtn: byId('openBtn'), sugg: byId('sugg'), codeNote: byId('codeNote'),
+    product: byId('product'), pCode: byId('pCode'), pMaster: byId('pMaster'), pEdited: byId('pEdited'), pSource: byId('pSource'),
+    pName: byId('pName'), pDetails: byId('pDetails'), saveItem: byId('saveItem'), resetItem: byId('resetItem'), itemNote: byId('itemNote'),
+    files: byId('files'), filesNote: byId('filesNote'),
+    drop: byId('drop'), picker: byId('picker'), staged: byId('staged'), addKind: byId('addKind'), addCodes: byId('addCodes'),
+    addAi: byId('addAi'), uploadBtn: byId('uploadBtn'), clearStaged: byId('clearStaged'),
+    addNote: byId('addNote'), reviews: byId('reviews'),
+    noteTitle: byId('noteTitle'), noteKind: byId('noteKind'), noteText: byId('noteText'), noteCounter: byId('noteCounter'),
+    noteCodes: byId('noteCodes'), saveNote: byId('saveNote'), noteNote: byId('noteNote'),
+    reviewTabs: byId('reviewTabs'), reviewList: byId('reviewList'), reviewNote: byId('reviewNote'), reviewPrev: byId('reviewPrev'),
+    reviewNext: byId('reviewNext'), reviewPage: byId('reviewPage'), newDraftBtn: byId('newDraftBtn'),
+    draftPanel: byId('draftPanel'), draftLabel: byId('draftLabel'), draftNote: byId('draftNote'), saveDraft: byId('saveDraft'),
+    assignOpen: byId('assignOpen'), deleteDraft: byId('deleteDraft'), draftNoteMsg: byId('draftNoteMsg'), assignBox: byId('assignBox'),
+    assignCode: byId('assignCode'), assignSugg: byId('assignSugg'), assignInfo: byId('assignInfo'), assignConfirm: byId('assignConfirm'),
+    assignCancel: byId('assignCancel'), itemPanel: byId('itemPanel'), hFiles: byId('hFiles'), logPanel: byId('logPanel'),
+    navNotice: byId('navNotice'), navNoticeText: byId('navNoticeText'), useNav: byId('useNav'),
+    logList: byId('logList'), logMore: byId('logMore'), logNote: byId('logNote'),
+    trashPanel: byId('trashPanel'), trashList: byId('trashList'), trashLoad: byId('trashLoad'), trashMore: byId('trashMore'), trashNote: byId('trashNote'),
+    scrim: byId('scrim'), backLink: byId('backLink')
+  };
+
+  var state = {
+    sess: null, mode: 'code', code: '', draftId: 0, data: null, files: [], initName: '', initDetails: '', initLabel: '', initNote: '',
+    busy: false, staged: [], reviews: [], stagedSeq: 0, logPage: 1, trashPage: 1,
+    reviewView: 'not_in_nav', reviewPage: 1, reviewSeq: 0, reviewCount: 0, assignRows: [], assignChecked: ''
+  };
+  // The current write target: the product code, or { draftId } while a Product Draft is open.
+  function currentTarget() { return state.mode === 'draft' ? { draftId: state.draftId } : state.code; }
+  function currentPrimary() { return state.mode === 'draft' ? '' : state.code; }
+  function pickMax() { return pickMaxFor(currentPrimary()); }
+  var addPicker = null;
+  var notePicker = null;
+
+  function el(tag, cls, text) {
+    var n = document.createElement(tag);
+    if (cls) n.className = cls;
+    if (text !== undefined && text !== null) n.textContent = text;
+    return n;
+  }
+  function add(parent, tag, cls, text) {
+    var n = el(tag, cls, text);
+    parent.appendChild(n);
+    return n;
+  }
+  function clear(node) { node.textContent = ''; }
+  function setNote(node, text, tone) {
+    node.textContent = text || '';
+    node.className = 'note' + (tone ? ' ' + tone : '');
+  }
+  function setBtnBusy(btn, busy) { btn.disabled = !!busy; }
+
+  function showMessage(text, isError) {
+    els.msg.hidden = false;
+    els.msg.className = 'panel ' + (isError ? 'error' : 'info');
+    clear(els.msg);
+    var ic = icon(isError ? 'alert' : 'info');
+    ic.setAttribute('width', '20');
+    ic.setAttribute('height', '20');
+    els.msg.appendChild(ic);
+    add(els.msg, 'div', '', text);
+  }
+  function hideMessage() { els.msg.hidden = true; clear(els.msg); }
+  function showDenied(text) {
+    els.app.hidden = true;
+    els.denied.hidden = false;
+    els.deniedText.textContent = text;
+  }
+
+  function loadStored() {
+    try {
+      var raw = sessionStorage.getItem(STORE_KEY);
+      return raw ? JSON.parse(raw) : null;
+    } catch (e) { return null; }
+  }
+  function clearStored() {
+    try { sessionStorage.removeItem(STORE_KEY); } catch (e) { /* storage blocked */ }
+  }
+
+  // POST to the manage Edge Function. Resolves the JSON body on 200, rejects { status, code } otherwise.
+  function api(body) {
+    var controller = new AbortController();
+    var timer = setTimeout(function () { controller.abort(); }, TIMEOUT_MS);
+    return fetch(SUPABASE_URL + '/functions/v1/manage', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json', 'x-pqa-session': state.sess.session },
+      body: JSON.stringify(body),
+      cache: 'no-store',
+      signal: controller.signal
+    }).then(function (resp) {
+      clearTimeout(timer);
+      return resp.json().then(function (data) { return { status: resp.status, data: data }; }, function () { return { status: resp.status, data: null }; });
+    }, function () {
+      clearTimeout(timer);
+      return { status: 0, data: null };
+    }).then(function (r) {
+      if (r.status === 200) return r.data;
+      if (r.status === 401) {
+        clearStored();
+        showDenied(errorText(401));
+      }
+      var err = new Error('manage ' + r.status);
+      err.status = r.status;
+      err.code = r.data && r.data.error ? String(r.data.error) : '';
+      throw err;
+    });
+  }
+  function failText(err) { return errorText(err && typeof err.status === 'number' ? err.status : 500); }
+
+  // ---------- dialogs ----------
+  var dialogOpen = null;
+  // opts: { title, build(body), buttons: [{ label, cls, run(close, setError) }], focus }
+  function openDialog(opts) {
+    return new Promise(function (resolve) {
+      var prevFocus = document.activeElement;
+      clear(els.scrim);
+      var box = add(els.scrim, 'div', 'modal');
+      box.setAttribute('role', 'dialog');
+      box.setAttribute('aria-modal', 'true');
+      var h = add(box, 'h2', '', opts.title);
+      h.id = 'dlgTitle';
+      box.setAttribute('aria-labelledby', 'dlgTitle');
+      var body = add(box, 'div', 'modal-body');
+      if (opts.build) opts.build(body);
+      var err = add(box, 'div', 'modal-err', '');
+      err.setAttribute('role', 'alert');
+      var actions = add(box, 'div', 'modal-actions');
+      var btns = [];
+      function close(value) {
+        els.scrim.className = '';
+        clear(els.scrim);
+        document.removeEventListener('keydown', onKey, true);
+        dialogOpen = null;
+        if (prevFocus && prevFocus.focus) prevFocus.focus();
+        resolve(value);
+      }
+      function setError(t) { err.textContent = t || ''; }
+      function onKey(e) {
+        if (e.key === 'Escape') { e.preventDefault(); close(null); return; }
+        if (e.key !== 'Tab') return;
+        var f = box.querySelectorAll('button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled])');
+        if (!f.length) return;
+        var first = f[0];
+        var last = f[f.length - 1];
+        if (e.shiftKey && document.activeElement === first) { e.preventDefault(); last.focus(); }
+        else if (!e.shiftKey && document.activeElement === last) { e.preventDefault(); first.focus(); }
+      }
+      opts.buttons.forEach(function (b) {
+        var btn = add(actions, 'button', 'btn ' + (b.cls || ''), b.label);
+        btn.type = 'button';
+        btn.addEventListener('click', function () { setError(''); b.run(close, setError, btn); });
+        btns.push(btn);
+      });
+      els.scrim.className = 'open';
+      dialogOpen = close;
+      document.addEventListener('keydown', onKey, true);
+      var target = opts.focus === 'first-field' ? box.querySelector('input, textarea, select') : btns[opts.focus || 0];
+      if (!target) target = btns[0];
+      if (target) target.focus();
+    });
+  }
+  function confirmBox(title, message, okLabel, danger) {
+    return openDialog({
+      title: title,
+      build: function (body) { add(body, 'p', '', message); },
+      focus: 0,
+      buttons: [
+        { label: 'ยกเลิก', cls: 'alt', run: function (close) { close(false); } },
+        { label: okLabel, cls: danger ? 'danger' : '', run: function (close) { close(true); } }
+      ]
+    }).then(function (v) { return v === true; });
+  }
+
+  function fillKindSelect(sel, value) {
+    clear(sel);
+    KIND_ORDER.forEach(function (k) {
+      var o = add(sel, 'option', '', KIND_LABEL[k]);
+      o.value = k;
+    });
+    sel.value = value;
+  }
+
+  // ---------- unsaved work ----------
+  function itemDirty() {
+    if (els.product.hidden) return false;
+    if (state.mode === 'draft') return els.draftLabel.value !== state.initLabel || els.draftNote.value !== state.initNote;
+    return els.pName.value !== state.initName || els.pDetails.value !== state.initDetails;
+  }
+  function hasUnsaved() {
+    if (els.product.hidden) return false;
+    if (els.noteText.value.trim() !== '') return true;
+    if (state.staged.length) return true;
+    for (var i = 0; i < state.reviews.length; i++) if (!state.reviews[i].saved) return true;
+    return itemDirty();
+  }
+  function confirmLeave() {
+    if (!hasUnsaved()) return Promise.resolve(true);
+    return confirmBox('ออกจากหน้านี้?', LEAVE_TEXT, 'ออกโดยไม่บันทึก', true);
+  }
+  window.addEventListener('beforeunload', function (e) {
+    if (!hasUnsaved()) return;
+    e.preventDefault();
+    e.returnValue = LEAVE_TEXT;
+  });
+  function guardLink(link) {
+    link.addEventListener('click', function (e) {
+      if (!hasUnsaved()) return;
+      e.preventDefault();
+      confirmLeave().then(function (ok) {
+        if (ok) {
+          state.staged = []; state.reviews = []; els.noteText.value = '';
+          els.pName.value = state.initName; els.pDetails.value = state.initDetails;
+          els.draftLabel.value = state.initLabel; els.draftNote.value = state.initNote;
+          window.location.href = link.getAttribute('href');
+        }
+      });
+    });
+  }
+
+  // ---------- code box and Item Master lookup ----------
+  function renderLookup(list, rows, onPick) {
+    clear(list);
+    rows.forEach(function (r) {
+      var li = add(list, 'li', '');
+      var b = add(li, 'button', 'sugg-btn', '');
+      b.type = 'button';
+      add(b, 'span', 'sugg-code', r.code);
+      add(b, 'span', 'sugg-name', r.name);
+      if (!r.inNav) add(b, 'span', 'tag warn', 'ยังไม่มีใน NAV');
+      b.addEventListener('click', function () { onPick(r.code); });
+    });
+    list.hidden = !list.children.length;
+  }
+  // Debounced Item Master lookup under a text input. close() also drops any reply still on its way,
+  // so a late reply cannot reopen the list after a code was opened.
+  function bindLookup(input, list, onPick, onRows) {
+    var seq = 0;
+    var timer = 0;
+    function close() { clearTimeout(timer); seq++; list.hidden = true; clear(list); }
+    function run() {
+      var q = input.value.trim();
+      if (!q) { close(); return; }
+      var mine = ++seq;
+      api(navSearchBody(q, SUGGEST_LIMIT)).then(function (data) {
+        if (mine !== seq) return;
+        var rows = navRows(data);
+        renderLookup(list, rows, function (code) { close(); onPick(code); });
+        if (onRows) onRows(rows, q);
+      }, function () {
+        if (mine !== seq) return;
+        list.hidden = true;
+      });
+    }
+    input.addEventListener('input', function () { clearTimeout(timer); timer = setTimeout(run, 250); });
+    return { close: close };
+  }
+  var codeLookup = bindLookup(els.codeInput, els.sugg, function (code) {
+    els.codeInput.value = code;
+    openCode(code);
+  }, null);
+
+  // ---------- open a product code or a Product Draft ----------
+  function openCode(code) {
+    code = String(code).trim();
+    codeLookup.close();
+    if (!isCode(code)) { setNote(els.codeNote, 'รหัสสินค้าต้องเป็นตัวเลข 7 หลัก', 'err'); return; }
+    if (state.busy) return;
+    confirmLeave().then(function (ok) {
+      if (!ok) return;
+      state.busy = true;
+      setNote(els.codeNote, 'กำลังเปิดรหัส ' + code + '...', '');
+      return loadItem(code, true).then(function () {
+        codeLookup.close();
+        setNote(els.codeNote, '', '');
+        resetWork();
+        els.product.hidden = false;
+        loadLog(true);
+      }, function (err) {
+        setNote(els.codeNote, failText(err), 'err');
+      }).then(function () { state.busy = false; });
+    });
+  }
+  function openDraft(id) {
+    codeLookup.close();
+    if (state.busy) return;
+    confirmLeave().then(function (ok) {
+      if (!ok) return;
+      state.busy = true;
+      setNote(els.codeNote, 'กำลังเปิดรายการ...', '');
+      return loadDraft(id, true).then(function () {
+        setNote(els.codeNote, '', '');
+        resetWork();
+        els.product.hidden = false;
+      }, function (err) {
+        setNote(els.codeNote, failText(err), 'err');
+      }).then(function () { state.busy = false; });
+    });
+  }
+  function closeProduct() {
+    resetWork();
+    els.product.hidden = true;
+    state.code = '';
+    state.draftId = 0;
+    state.files = [];
+    state.initName = ''; state.initDetails = ''; state.initLabel = ''; state.initNote = '';
+  }
+  function resetWork() {
+    state.staged.forEach(function (s) { try { URL.revokeObjectURL(s.previewUrl); } catch (e) { /* ignore */ } });
+    state.staged = [];
+    state.reviews = [];
+    renderStaged();
+    clear(els.reviews);
+    els.noteText.value = '';
+    els.noteTitle.value = '';
+    updateCounter();
+    if (addPicker) addPicker.reset();
+    if (notePicker) notePicker.reset();
+    els.assignBox.hidden = true;
+    els.assignCode.value = '';
+    state.assignRows = [];
+    state.assignChecked = '';
+    setNote(els.assignInfo, '', '');
+    setNote(els.draftNoteMsg, '', '');
+    setNote(els.addNote, '', '');
+    setNote(els.noteNote, '', '');
+    setNote(els.itemNote, '', '');
+    setNote(els.filesNote, '', '');
+  }
+  function showMode(mode) {
+    state.mode = mode;
+    els.itemPanel.hidden = mode !== 'code';
+    els.draftPanel.hidden = mode !== 'draft';
+    els.logPanel.hidden = mode !== 'code';
+    els.hFiles.textContent = mode === 'draft' ? 'เอกสารและรูปของรายการนี้' : 'เอกสารและรูปของรหัสนี้';
+  }
+  function loadItem(code, discardEdits) {
+    return api(itemGetBody(code)).then(function (data) {
+      // A reload of the same code must not wipe name/details the Editor is still typing.
+      var keepEdits = !discardEdits && state.mode === 'code' && state.code === code && !els.product.hidden && itemDirty();
+      showMode('code');
+      state.code = code;
+      state.draftId = 0;
+      state.data = data && typeof data === 'object' ? data : {};
+      state.files = normalizeFiles(state.data.files);
+      renderProduct(keepEdits);
+    });
+  }
+  function loadDraft(id, discardEdits) {
+    return api(draftGetBody(id)).then(function (data) {
+      var keepEdits = !discardEdits && state.mode === 'draft' && state.draftId === id && !els.product.hidden && itemDirty();
+      var d = normalizeDraft(data);
+      showMode('draft');
+      state.code = '';
+      state.draftId = id;
+      state.data = data && typeof data === 'object' ? data : {};
+      state.files = d.files;
+      state.initLabel = d.label;
+      state.initNote = d.note;
+      if (!keepEdits) {
+        els.draftLabel.value = d.label;
+        els.draftNote.value = d.note;
+      }
+      renderFiles();
+    });
+  }
+  function reloadItem() {
+    var p = state.mode === 'draft' ? loadDraft(state.draftId) : loadItem(state.code);
+    return p.then(null, function (err) { setNote(els.filesNote, failText(err), 'err'); });
+  }
+
+  function renderProduct(keepEdits) {
+    var d = state.data;
+    var master = d.master && typeof d.master === 'object' ? d.master : null;
+    var item = d.item && typeof d.item === 'object' ? d.item : null;
+    els.pCode.textContent = state.code;
+    els.pMaster.textContent = master ? String(master.name || '') : 'ไม่มีในรายการสินค้ากลาง';
+    els.pMaster.className = 'master' + (master ? '' : ' none');
+    var nn = navNowOf(d);
+    els.navNotice.hidden = !nn;
+    els.navNoticeText.textContent = nn ? navNoticeText(nn) : '';
+    var src = '';
+    if (item && item.documentTitle) src = 'จากเอกสาร: ' + item.documentTitle + (item.page ? ' หน้า ' + item.page : '');
+    else if (!item) src = 'ยังไม่มีรายการสินค้านี้ในเอกสาร ถ้าบันทึกชื่อ ระบบจะสร้างรายการใหม่ในกลุ่ม "ข้อมูลที่จัดซื้อเพิ่มเอง"';
+    if (master && master.status) src += (src ? ' | ' : '') + 'สถานะในรายการสินค้ากลาง: ' + master.status;
+    els.pSource.textContent = src;
+    state.initName = item ? String(item.name || '') : (master ? String(master.name || '') : '');
+    state.initDetails = item ? String(item.details || '') : (master ? String(master.details || '') : '');
+    if (!keepEdits) {
+      els.pName.value = state.initName;
+      els.pDetails.value = state.initDetails;
+    }
+    var edited = !!(item && item.edited);
+    els.pEdited.hidden = !edited;
+    els.pEdited.textContent = edited ? 'แก้ไขแล้วโดย ' + (item.editedBy || '-') + (item.editedAt ? ' ' + thaiDateTime(item.editedAt) : '') : '';
+    els.resetItem.hidden = !edited;
+    els.saveItem.textContent = item ? 'บันทึกชื่อและรายละเอียด' : 'สร้างรายการสินค้า';
+    renderFiles();
+  }
+
+  // ---------- code picker (every "ใช้กับรหัสอื่นด้วย" field) ----------
+  // Search box (debounced nav.search, limit 100), checkbox results, select all / none for the rows shown,
+  // chips for the selection and a counter. Pasting or typing a list of codes adds them directly.
+  function createPicker(root, inputId) {
+    var selected = [];
+    var shown = [];
+    var boxes = [];
+    var seq = 0;
+    var timer = 0;
+    clear(root);
+    var search = add(root, 'input', 'input');
+    search.type = 'text';
+    search.id = inputId;
+    search.autocomplete = 'off';
+    search.placeholder = 'พิมพ์รหัสหรือชื่อสินค้าเพื่อค้นหา หรือวางรายการรหัส';
+    var bar = add(root, 'div', 'picker-bar');
+    var allBtn = add(bar, 'button', 'btn alt small', 'เลือกทั้งหมด');
+    allBtn.type = 'button';
+    var noneBtn = add(bar, 'button', 'btn alt small', 'ไม่เลือกทั้งหมด');
+    noneBtn.type = 'button';
+    var results = add(root, 'ul', 'picker-results');
+    results.hidden = true;
+    var chips = add(root, 'div', 'chips');
+    var count = add(root, 'p', 'note', '');
+    var msg = add(root, 'p', 'note', '');
+    msg.setAttribute('role', 'status');
+    msg.setAttribute('aria-live', 'polite');
+
+    function say(n) { setNote(msg, n.text, n.text ? n.tone : ''); }
+    function refresh() {
+      clear(chips);
+      selected.forEach(function (c) {
+        var chip = add(chips, 'span', 'chip', c);
+        var x = add(chip, 'button', '', 'x');
+        x.type = 'button';
+        x.setAttribute('aria-label', 'เอารหัส ' + c + ' ออก');
+        x.addEventListener('click', function () {
+          selected = pickerRemove(selected, c);
+          setNote(msg, '', '');
+          refresh();
+        });
+      });
+      count.textContent = pickerCounter(selected.length, pickMax());
+      count.className = 'note' + (selected.length >= pickMax() ? ' warn' : '');
+      allBtn.disabled = !shown.length;
+      noneBtn.disabled = !shown.length;
+      boxes.forEach(function (b) { b.box.checked = selected.indexOf(b.code) !== -1; });
+    }
+    function renderResults() {
+      clear(results);
+      boxes = [];
+      shown.forEach(function (r) {
+        var li = add(results, 'li', '');
+        var lab = add(li, 'label', 'pick-row');
+        var box = document.createElement('input');
+        box.type = 'checkbox';
+        lab.appendChild(box);
+        add(lab, 'span', 'sugg-code', r.code);
+        add(lab, 'span', 'pick-name', r.name);
+        if (!r.inNav) add(lab, 'span', 'tag warn', 'ยังไม่มีใน NAV');
+        if (r.code === currentPrimary()) { box.disabled = true; add(lab, 'span', 'tag', 'รหัสนี้'); }
+        box.addEventListener('change', function () {
+          if (box.checked) {
+            var res = pickerAdd(selected, [r.code], pickMax(), currentPrimary());
+            if (res.capped) say(pickerNote(res, pickMax()));
+            else selected = res.selected;
+          } else {
+            selected = pickerRemove(selected, r.code);
+          }
+          refresh();
+        });
+        boxes.push({ code: r.code, box: box });
+      });
+      results.hidden = !shown.length;
+    }
+    function run() {
+      var q = search.value.trim();
+      if (!q) { seq++; shown = []; renderResults(); refresh(); return; }
+      var mine = ++seq;
+      api(navSearchBody(q, PICK_LIMIT)).then(function (data) {
+        if (mine !== seq) return;
+        shown = navRows(data);
+        renderResults();
+        refresh();
+        if (!shown.length) setNote(msg, 'ไม่พบรหัสหรือชื่อที่ตรงกัน', '');
+        else if (shown.length >= PICK_LIMIT) setNote(msg, 'แสดง ' + PICK_LIMIT + ' รายการแรก พิมพ์เพิ่มเพื่อให้แคบลง', '');
+        else setNote(msg, '', '');
+      }, function (err) {
+        if (mine !== seq) return;
+        setNote(msg, failText(err), 'err');
+      });
+    }
+    function applyText(text) {
+      var res = pickerPaste(selected, text, pickMax(), currentPrimary());
+      if (!res.handled) return false;
+      selected = res.selected;
+      say(pickerNote(res, pickMax()));
+      refresh();
+      return true;
+    }
+    search.addEventListener('input', function () { clearTimeout(timer); timer = setTimeout(run, 250); });
+    search.addEventListener('paste', function (e) {
+      var cd = e.clipboardData;
+      var text = cd && cd.getData ? cd.getData('text') : '';
+      if (text && applyText(text)) e.preventDefault();
+    });
+    search.addEventListener('keydown', function (e) {
+      if (e.key !== 'Enter') return;
+      e.preventDefault();
+      if (applyText(search.value)) { search.value = ''; clearTimeout(timer); run(); }
+    });
+    allBtn.addEventListener('click', function () {
+      var res = pickerSelectAll(selected, shown, pickMax(), currentPrimary());
+      selected = res.selected;
+      say(pickerNote(res, pickMax()));
+      refresh();
+    });
+    noneBtn.addEventListener('click', function () {
+      selected = pickerSelectNone(selected, shown);
+      setNote(msg, '', '');
+      refresh();
+    });
+    refresh();
+    return {
+      input: search,
+      getCodes: function () { return selected.slice(); },
+      setCodes: function (list) { selected = pickerAdd([], list, pickMax(), currentPrimary()).selected; refresh(); },
+      reset: function () {
+        clearTimeout(timer);
+        seq++;
+        selected = [];
+        shown = [];
+        search.value = '';
+        renderResults();
+        setNote(msg, '', '');
+        refresh();
+      }
+    };
+  }
+
+  // ---------- review lists ----------
+  function buildTabs() {
+    clear(els.reviewTabs);
+    REVIEW_VIEWS.forEach(function (v) {
+      var b = add(els.reviewTabs, 'button', 'tab', v.label);
+      b.type = 'button';
+      b.setAttribute('role', 'tab');
+      b.setAttribute('aria-selected', v.id === state.reviewView ? 'true' : 'false');
+      b.addEventListener('click', function () {
+        state.reviewView = v.id;
+        state.reviewPage = 1;
+        for (var i = 0; i < els.reviewTabs.children.length; i++) {
+          els.reviewTabs.children[i].setAttribute('aria-selected', els.reviewTabs.children[i] === b ? 'true' : 'false');
+        }
+        loadReview();
+      });
+    });
+  }
+  function renderReview(rows) {
+    clear(els.reviewList);
+    rows.forEach(function (row) {
+      var li = add(els.reviewList, 'li', '');
+      var b = add(li, 'button', 'rev-btn', '');
+      b.type = 'button';
+      if (row.kind === 'draft') add(b, 'span', 'tag warn', 'ยังไม่มีรหัส');
+      else add(b, 'span', 'sugg-code', row.code);
+      add(b, 'span', 'rev-name', row.name || '(ยังไม่มีชื่อ)');
+      add(b, 'span', 'rev-meta', reviewMeta(row));
+      b.addEventListener('click', function () {
+        if (row.kind === 'draft') openDraft(row.draftId);
+        else { els.codeInput.value = row.code; openCode(row.code); }
+      });
+    });
+  }
+  function loadReview() {
+    var mine = ++state.reviewSeq;
+    var view = state.reviewView;
+    var page = state.reviewPage;
+    setNote(els.reviewNote, 'กำลังโหลด...', '');
+    els.reviewPrev.disabled = true;
+    els.reviewNext.disabled = true;
+    api(reviewListBody(view, page)).then(function (data) {
+      if (mine !== state.reviewSeq) return;
+      var rows = reviewRows(view, data);
+      if (!rows.length && page > 1) { state.reviewPage = page - 1; loadReview(); return; }
+      renderReview(rows);
+      els.reviewPrev.disabled = page <= 1;
+      els.reviewNext.disabled = !reviewHasNext(data, page, rowsOf(data).length);
+      els.reviewPage.textContent = rows.length ? reviewPageText(page, rows.length) : '';
+      setNote(els.reviewNote, rows.length ? '' : reviewViewOf(view).empty, '');
+    }, function (err) {
+      if (mine !== state.reviewSeq) return;
+      clear(els.reviewList);
+      els.reviewPrev.disabled = page <= 1;
+      setNote(els.reviewNote, failText(err), 'err');
+    });
+  }
+
+  // ---------- Product Draft actions ----------
+  function newDraft() {
+    if (state.busy) return;
+    var labelIn;
+    var noteIn;
+    openDialog({
+      title: 'เพิ่มสินค้าที่ยังไม่มีรหัส',
+      focus: 'first-field',
+      build: function (body) {
+        add(body, 'p', 'note', 'สาขายังมองไม่เห็นรายการนี้ จนกว่าจะใส่รหัสให้');
+        add(body, 'label', 'lbl', 'ชื่อรายการ').setAttribute('for', 'ndLabel');
+        labelIn = add(body, 'input', 'input');
+        labelIn.id = 'ndLabel';
+        labelIn.type = 'text';
+        labelIn.maxLength = 200;
+        add(body, 'label', 'lbl', 'บันทึกช่วยจำ (ไม่บังคับ)').setAttribute('for', 'ndNote');
+        noteIn = add(body, 'textarea', 'input');
+        noteIn.id = 'ndNote';
+        noteIn.rows = 3;
+        noteIn.maxLength = 2000;
+      },
+      buttons: [
+        { label: 'ยกเลิก', cls: 'alt', run: function (close) { close(null); } },
+        {
+          label: 'สร้างรายการ',
+          run: function (close, setError, btn) {
+            var chk = draftCheck(labelIn.value);
+            if (!chk.ok) { setError(chk.text); return; }
+            btn.disabled = true;
+            api(draftCreateBody(chk.text, noteIn.value)).then(function (data) {
+              var id = draftIdOf(data);
+              if (!id) { btn.disabled = false; setError(errorText(500)); return; }
+              close(id);
+            }, function (err) {
+              btn.disabled = false;
+              setError(failText(err));
+            });
+          }
+        }
+      ]
+    }).then(function (id) {
+      if (!id) return;
+      loadReview();
+      openDraft(id);
+    });
+  }
+  function saveDraft() {
+    if (state.busy) return;
+    var chk = draftCheck(els.draftLabel.value);
+    if (!chk.ok) { setNote(els.draftNoteMsg, chk.text, 'err'); els.draftLabel.focus(); return; }
+    if (els.draftNote.value.trim().length > 2000) { setNote(els.draftNoteMsg, 'บันทึกช่วยจำยาวเกิน 2,000 ตัวอักษร', 'err'); return; }
+    state.busy = true;
+    setBtnBusy(els.saveDraft, true);
+    setNote(els.draftNoteMsg, 'กำลังบันทึก...', '');
+    api(draftUpdateBody(state.draftId, { label: chk.text, note: els.draftNote.value })).then(function () {
+      return reloadItem().then(function () { loadReview(); setNote(els.draftNoteMsg, 'บันทึกแล้ว', 'ok'); });
+    }, function (err) {
+      setNote(els.draftNoteMsg, failText(err), 'err');
+    }).then(function () { state.busy = false; setBtnBusy(els.saveDraft, false); });
+  }
+  function deleteDraft() {
+    if (state.busy) return;
+    var label = els.draftLabel.value.trim() || state.initLabel;
+    confirmBox('ลบรายการ', deleteDraftMessage(label, state.files.length), 'ลบรายการนี้', true).then(function (ok) {
+      if (!ok || state.busy) return;
+      state.busy = true;
+      setNote(els.draftNoteMsg, 'กำลังลบ...', '');
+      return api(draftDeleteBody(state.draftId)).then(function () {
+        closeProduct();
+        loadReview();
+        setNote(els.codeNote, 'ลบรายการแล้ว', 'ok');
+      }, function (err) {
+        setNote(els.draftNoteMsg, failText(err), 'err');
+      }).then(function () { state.busy = false; });
+    });
+  }
+  function renderAssignInfo() {
+    var v = els.assignCode.value.trim();
+    if (v !== state.assignChecked) { setNote(els.assignInfo, '', ''); return; }
+    var t = assignInfoText(v, state.assignRows, els.draftLabel.value.trim() || state.initLabel);
+    setNote(els.assignInfo, t.text, t.tone);
+  }
+  var assignLookup = bindLookup(els.assignCode, els.assignSugg, function (code) {
+    els.assignCode.value = code;
+    state.assignChecked = code;
+    renderAssignInfo();
+  }, function (rows, q) {
+    state.assignRows = rows;
+    state.assignChecked = q;
+    renderAssignInfo();
+  });
+  function openAssign() {
+    if (hasUnsaved()) { setNote(els.draftNoteMsg, 'มีข้อมูลที่ยังไม่ได้บันทึก กรุณาบันทึกหรือล้างก่อน แล้วค่อยใส่รหัส', 'warn'); return; }
+    setNote(els.draftNoteMsg, '', '');
+    els.assignBox.hidden = false;
+    els.assignCode.focus();
+  }
+  function closeAssign() {
+    assignLookup.close();
+    els.assignBox.hidden = true;
+  }
+  function confirmAssign() {
+    if (state.busy) return;
+    var code = els.assignCode.value.trim();
+    if (!isCode(code)) { setNote(els.assignInfo, 'รหัสสินค้าต้องเป็นตัวเลข 7 หลัก', 'err'); els.assignCode.focus(); return; }
+    if (hasUnsaved()) { setNote(els.assignInfo, 'มีข้อมูลที่ยังไม่ได้บันทึก กรุณาบันทึกหรือล้างก่อน', 'warn'); return; }
+    var label = state.initLabel;
+    var navName = state.assignChecked === code ? navNameOf(code, state.assignRows) : '';
+    confirmBox('ใส่รหัสให้รายการนี้', assignMessage(label, code, navName), 'ใส่รหัส ' + code, false).then(function (ok) {
+      if (!ok || state.busy) return;
+      state.busy = true;
+      setBtnBusy(els.assignConfirm, true);
+      setNote(els.assignInfo, 'กำลังบันทึก...', '');
+      return api(draftAssignBody(state.draftId, code)).then(function () {
+        // openCode runs after this handler and sets busy itself; do not clear it again afterwards.
+        state.busy = false;
+        setBtnBusy(els.assignConfirm, false);
+        closeAssign();
+        loadReview();
+        els.codeInput.value = code;
+        openCode(code);
+      }, function (err) {
+        state.busy = false;
+        setBtnBusy(els.assignConfirm, false);
+        setNote(els.assignInfo, failText(err), 'err');
+      });
+    });
+  }
+
+  // ---------- NAV notice ----------
+  function useNavName() {
+    var nn = navNowOf(state.data);
+    if (!nn || state.busy || state.mode !== 'code') return;
+    confirmBox('ใช้ชื่อจาก NAV', useNavMessage(state.code, state.initName, nn.name), 'ใช้ชื่อจาก NAV', false).then(function (ok) {
+      if (!ok || state.busy) return;
+      state.busy = true;
+      setBtnBusy(els.useNav, true);
+      setNote(els.itemNote, 'กำลังบันทึก...', '');
+      return api(itemUseNavBody(state.code)).then(function () {
+        return loadItem(state.code, true).then(function () {
+          loadLog(true);
+          loadReview();
+          setNote(els.itemNote, 'ใช้ชื่อจาก NAV แล้ว', 'ok');
+        }, function (err) { setNote(els.itemNote, failText(err), 'err'); });
+      }, function (err) {
+        setNote(els.itemNote, failText(err), 'err');
+      }).then(function () { state.busy = false; setBtnBusy(els.useNav, false); });
+    });
+  }
+
+  function renderFiles() {
+    clear(els.files);
+    var today = bangkokToday(Date.now());
+    var groups = groupByKind(state.files);
+    if (!groups.length) {
+      add(els.files, 'p', 'empty', 'ยังไม่มีรูปหรือเอกสารของรหัสนี้');
+      return;
+    }
+    groups.forEach(function (g) {
+      add(els.files, 'h3', '', g.label + ' (' + g.files.length + ')');
+      var grid = add(els.files, 'div', 'grid');
+      g.files.forEach(function (f) { grid.appendChild(makeFileTile(f, today)); });
+    });
+  }
+  function makeFileTile(f, today) {
+    var tile = el('div', 'file');
+    var top = add(tile, 'div', 'file-top');
+    var imgBox = add(top, 'div', 'file-img');
+    if (isTextNote(f)) {
+      imgBox.className = 'file-img text';
+      imgBox.textContent = excerpt(f.text, 90);
+    } else if (isTrustedFileUrl(f.thumbUrl || f.url, SUPABASE_URL)) {
+      var im = document.createElement('img');
+      im.alt = '';
+      im.onerror = function () { im.hidden = true; imgBox.textContent = 'ไม่มีรูป'; };
+      im.src = f.thumbUrl || f.url;
+      imgBox.appendChild(im);
+    } else {
+      imgBox.textContent = 'ไม่มีรูป';
+    }
+    var main = add(top, 'div', 'file-main');
+    add(main, 'p', 'file-title', f.title);
+    var tags = add(main, 'div', 'tags');
+    if (isTextNote(f)) add(tags, 'span', 'tag', 'ข้อความ');
+    var badge = certBadge(f, today);
+    if (badge) add(tags, 'span', 'tag ' + badge.tone, badge.label);
+    add(tags, 'span', 'tag' + (state.mode === 'draft' && !f.codes.length ? ' warn' : ''), codesTagText(state.mode === 'draft' ? f.codes.length : (f.codes.length || 1)));
+    if (f.kind === 'cert' && (f.certNo || f.validUntil)) {
+      var bits = [];
+      if (f.certNo) bits.push('เลขที่ ' + f.certNo);
+      if (f.validUntil) bits.push('ถึง ' + thaiDate(f.validUntil));
+      add(main, 'p', 'note', bits.join(' · '));
+    }
+    var btns = add(tile, 'div', 'file-btns');
+    var edit = add(btns, 'button', 'btn alt small', 'แก้ไข');
+    edit.type = 'button';
+    edit.addEventListener('click', function () { editFile(f); });
+    if (state.mode === 'code') {
+      var unlink = add(btns, 'button', 'btn alt small', 'เอาออกจากรหัสนี้');
+      unlink.type = 'button';
+      unlink.addEventListener('click', function () { unlinkFile(f); });
+    }
+    var del = add(btns, 'button', 'btn danger small', state.mode === 'draft' ? 'ลบไฟล์นี้' : 'ลบจากทุกรหัส');
+    del.type = 'button';
+    del.addEventListener('click', function () { deleteFile(f); });
+    return tile;
+  }
+
+  // ---------- item name / details ----------
+  function saveItem() {
+    if (state.busy) return;
+    var name = els.pName.value.trim();
+    if (!name) { setNote(els.itemNote, 'กรุณาใส่ชื่อสินค้า', 'err'); els.pName.focus(); return; }
+    if (name.length > 200) { setNote(els.itemNote, 'ชื่อสินค้ายาวเกิน 200 ตัวอักษร', 'err'); return; }
+    if (els.pDetails.value.trim().length > 2000) { setNote(els.itemNote, 'รายละเอียดยาวเกิน 2,000 ตัวอักษร', 'err'); return; }
+    state.busy = true;
+    setBtnBusy(els.saveItem, true);
+    setNote(els.itemNote, 'กำลังบันทึก...', '');
+    api(itemUpdateBody(state.code, name, els.pDetails.value)).then(function () {
+      return reloadItem().then(function () { loadLog(true); setNote(els.itemNote, 'บันทึกแล้ว', 'ok'); });
+    }, function (err) {
+      setNote(els.itemNote, failText(err), 'err');
+    }).then(function () { state.busy = false; setBtnBusy(els.saveItem, false); });
+  }
+  function resetItem() {
+    if (state.busy) return;
+    confirmBox('กลับค่าเดิม', 'คืนชื่อและรายละเอียดของรหัส ' + state.code + ' เป็นค่าจากเอกสารต้นฉบับ', 'กลับค่าเดิม', false).then(function (ok) {
+      if (!ok) return;
+      state.busy = true;
+      setNote(els.itemNote, 'กำลังบันทึก...', '');
+      return api(itemResetBody(state.code)).then(function () {
+        return reloadItem().then(function () { loadLog(true); setNote(els.itemNote, 'กลับค่าเดิมแล้ว', 'ok'); });
+      }, function (err) {
+        setNote(els.itemNote, failText(err), 'err');
+      }).then(function () { state.busy = false; });
+    });
+  }
+
+  // ---------- file actions ----------
+  function unlinkFile(f) {
+    var last = f.codes.length <= 1;
+    var go = last ? confirmBox('เอาออกจากรหัสนี้', unlinkLastMessage(f.title, state.code), 'เอาออกและย้ายไปถังขยะ', true) : Promise.resolve(true);
+    go.then(function (ok) {
+      if (!ok || state.busy) return;
+      state.busy = true;
+      setNote(els.filesNote, 'กำลังบันทึก...', '');
+      return api(fileUnlinkBody(f.id, state.code)).then(function () {
+        return reloadItem().then(function () { loadLog(true); setNote(els.filesNote, 'เอาออกจากรหัส ' + state.code + ' แล้ว', 'ok'); });
+      }, function (err) {
+        setNote(els.filesNote, failText(err), 'err');
+      }).then(function () { state.busy = false; });
+    });
+  }
+  function deleteFile(f) {
+    var n = f.codes.length || 1;
+    var inDraft = state.mode === 'draft';
+    confirmBox(inDraft ? 'ลบไฟล์นี้' : 'ลบจากทุกรหัส', inDraft ? deleteDraftFileMessage(f.title) : deleteAllMessage(f.title, n), inDraft ? 'ลบไฟล์นี้' : 'ลบจากทุกรหัส', true).then(function (ok) {
+      if (!ok || state.busy) return;
+      state.busy = true;
+      setNote(els.filesNote, 'กำลังลบ...', '');
+      return api(fileDeleteBody(f.id)).then(function () {
+        return reloadItem().then(function () { loadLog(true); setNote(els.filesNote, 'ลบแล้ว (ผู้ดูแลกู้คืนได้จากถังขยะ)', 'ok'); });
+      }, function (err) {
+        setNote(els.filesNote, failText(err), 'err');
+      }).then(function () { state.busy = false; });
+    });
+  }
+  function editFile(f) {
+    var kindSel, titleIn, textIn, noIn, dateIn, picker, hint;
+    var inDraft = state.mode === 'draft';
+    var noText = !isTextNote(f);
+    openDialog({
+      title: 'แก้ไข: ' + f.title,
+      focus: 'first-field',
+      build: function (body) {
+        add(body, 'label', 'lbl', 'ประเภท').setAttribute('for', 'edKind');
+        // ds-allow-native-select: native select keeps keyboard and screen-reader behaviour on old Edge 109
+        kindSel = add(body, 'select', 'input');
+        kindSel.id = 'edKind';
+        fillKindSelect(kindSel, f.kind);
+        add(body, 'label', 'lbl', 'ชื่อไฟล์').setAttribute('for', 'edTitle');
+        titleIn = add(body, 'input', 'input');
+        titleIn.id = 'edTitle';
+        titleIn.type = 'text';
+        titleIn.maxLength = 120;
+        titleIn.value = f.title;
+        add(body, 'label', 'lbl', noText ? 'ข้อความที่อ่านได้จากรูป (ไม่บังคับ)' : 'ข้อความ').setAttribute('for', 'edText');
+        textIn = add(body, 'textarea', 'input');
+        textIn.id = 'edText';
+        textIn.rows = 8;
+        textIn.value = f.text;
+        add(body, 'label', 'lbl', 'เลขที่ใบรับรอง (ประเภทใบรับรองเท่านั้น)').setAttribute('for', 'edNo');
+        noIn = add(body, 'input', 'input');
+        noIn.id = 'edNo';
+        noIn.type = 'text';
+        noIn.value = f.certNo;
+        add(body, 'label', 'lbl', 'ใช้ได้ถึงวันที่ (ค.ศ.)').setAttribute('for', 'edDate');
+        dateIn = add(body, 'input', 'input');
+        dateIn.id = 'edDate';
+        dateIn.type = 'date';
+        dateIn.value = f.validUntil;
+        add(body, 'label', 'lbl', inDraft ? 'แสดงกับรหัสเหล่านี้ด้วย (ไม่บังคับ ใส่แล้วสาขาจะเห็นไฟล์นี้ทันที)' : 'ใช้กับรหัสอื่นด้วย (รหัส ' + state.code + ' ใช้อยู่แล้ว)').setAttribute('for', 'edCodes');
+        picker = createPicker(add(body, 'div', ''), 'edCodes');
+        picker.setCodes(f.codes);
+        hint = add(body, 'p', 'note', '');
+        function syncCert() { var isCert = kindSel.value === 'cert'; noIn.disabled = !isCert; dateIn.disabled = !isCert; }
+        kindSel.addEventListener('change', syncCert);
+        syncCert();
+      },
+      buttons: [
+        { label: 'ยกเลิก', cls: 'alt', run: function (close) { close(null); } },
+        {
+          label: 'บันทึก',
+          run: function (close, setError, btn) {
+            var extras = picker.getCodes();
+            // In a Product Draft an empty set means "leave the links alone" (null); in a code view the open code always stays linked.
+            var codes = inDraft ? (extras.length ? extras : null) : mergeCodes(state.code, extras);
+            if (!titleIn.value.trim()) { setError('กรุณาใส่ชื่อไฟล์'); return; }
+            if (kindSel.value === 'cert' && dateIn.value && !isIsoDate(dateIn.value)) { setError('วันที่ไม่ถูกต้อง'); return; }
+            var text = textIn.value;
+            if (normalizeText(text).trim().length > NOTE_MAX) { setError('ข้อความยาวเกิน ' + formatInt(NOTE_MAX) + ' ตัวอักษร'); return; }
+            if (!noText && !normalizeText(text).trim()) { setError('ข้อความต้องไม่ว่าง'); return; }
+            btn.disabled = true;
+            hint.textContent = 'กำลังบันทึก...';
+            api(fileUpdateBody(f.id, { kind: kindSel.value, title: titleIn.value, text: text, certNo: noIn.value, validUntil: dateIn.value, codes: codes })).then(function () {
+              close(true);
+            }, function (err) {
+              btn.disabled = false;
+              hint.textContent = '';
+              setError(failText(err));
+            });
+          }
+        }
+      ]
+    }).then(function (saved) {
+      if (saved !== true) return;
+      return reloadItem().then(function () { loadLog(true); setNote(els.filesNote, 'บันทึกแล้ว', 'ok'); });
+    });
+  }
+
+  // ---------- picking, pasting and resizing pictures ----------
+  function addFiles(list) {
+    var added = 0;
+    var skipped = 0;
+    for (var i = 0; i < list.length; i++) {
+      var f = list[i];
+      if (!f || typeof f.type !== 'string' || f.type.indexOf('image/') !== 0) { skipped++; continue; }
+      if (state.staged.length >= UPLOAD_MAX) { skipped++; continue; }
+      state.staged.push({ id: ++state.stagedSeq, file: f, previewUrl: URL.createObjectURL(f) });
+      added++;
+    }
+    renderStaged();
+    if (skipped) setNote(els.addNote, 'ข้ามไฟล์ที่ไม่ใช่รูป หรือเกิน ' + UPLOAD_MAX + ' รูปต่อครั้ง ' + skipped + ' ไฟล์', 'warn');
+    else setNote(els.addNote, added ? 'เลือกแล้ว ' + state.staged.length + ' รูป กด "อัปโหลดรูปที่เลือก" เมื่อพร้อม' : '', '');
+  }
+  function renderStaged() {
+    clear(els.staged);
+    state.staged.forEach(function (s) {
+      var box = add(els.staged, 'div', 'stage');
+      var im = document.createElement('img');
+      im.alt = s.file.name || 'รูปที่เลือก';
+      im.src = s.previewUrl;
+      box.appendChild(im);
+      var x = add(box, 'button', '', 'x');
+      x.type = 'button';
+      x.setAttribute('aria-label', 'เอารูปนี้ออกจากรายการ');
+      x.addEventListener('click', function () {
+        try { URL.revokeObjectURL(s.previewUrl); } catch (e) { /* ignore */ }
+        state.staged = state.staged.filter(function (t) { return t.id !== s.id; });
+        renderStaged();
+      });
+    });
+    els.uploadBtn.disabled = state.busy || !state.staged.length;
+    els.clearStaged.hidden = !state.staged.length;
+  }
+
+  function noop() {}
+  function bitmapViaImage(file) {
+    return new Promise(function (resolve, reject) {
+      var url = URL.createObjectURL(file);
+      var img = new Image();
+      img.onload = function () {
+        URL.revokeObjectURL(url);
+        resolve({ source: img, width: img.naturalWidth, height: img.naturalHeight, close: noop });
+      };
+      img.onerror = function () { URL.revokeObjectURL(url); reject(new Error('decode')); };
+      img.src = url;
+    });
+  }
+  function wrapBitmap(b) { return { source: b, width: b.width, height: b.height, close: function () { if (b.close) b.close(); } }; }
+  // Decode with the EXIF orientation applied where createImageBitmap supports it; plain Image otherwise.
+  function loadBitmap(file) {
+    if (typeof createImageBitmap !== 'function') return bitmapViaImage(file);
+    return createImageBitmap(file, { imageOrientation: 'from-image' }).then(wrapBitmap, function () {
+      return createImageBitmap(file).then(wrapBitmap, function () { return bitmapViaImage(file); });
+    });
+  }
+  function canvasBlob(canvas, quality) {
+    return new Promise(function (resolve, reject) {
+      canvas.toBlob(function (b) { if (b) resolve(b); else reject(new Error('encode')); }, 'image/jpeg', quality);
+    });
+  }
+  function drawScaled(source, sw, sh, max) {
+    var size = fitSize(sw, sh, max);
+    var canvas = document.createElement('canvas');
+    canvas.width = size.width;
+    canvas.height = size.height;
+    var ctx = canvas.getContext('2d');
+    ctx.fillStyle = 'white'; // JPEG has no alpha: flatten transparent pixels on white
+    ctx.fillRect(0, 0, size.width, size.height);
+    ctx.imageSmoothingQuality = 'high';
+    ctx.drawImage(source, 0, 0, size.width, size.height);
+    return canvas;
+  }
+  // File -> { main: Blob 1600px, thumb: Blob 360px, width, height } (JPEG).
+  function resizeImage(file) {
+    return loadBitmap(file).then(function (bmp) {
+      var mainCanvas;
+      try {
+        mainCanvas = drawScaled(bmp.source, bmp.width, bmp.height, MAIN_MAX);
+      } finally {
+        bmp.close();
+      }
+      var thumbCanvas = drawScaled(mainCanvas, mainCanvas.width, mainCanvas.height, THUMB_MAX);
+      return canvasBlob(mainCanvas, QUALITY_MAIN).then(function (mainBlob) {
+        return canvasBlob(thumbCanvas, QUALITY_THUMB).then(function (thumbBlob) {
+          return { main: mainBlob, thumb: thumbBlob, width: mainCanvas.width, height: mainCanvas.height };
+        });
+      });
+    });
+  }
+  function putBlob(url, blob) {
+    if (!isTrustedUploadUrl(url, SUPABASE_URL)) {
+      var bad = new Error('upload url');
+      bad.status = 500;
+      return Promise.reject(bad);
+    }
+    return fetch(url, { method: 'PUT', headers: { 'content-type': 'image/jpeg' }, body: blob, cache: 'no-store' }).then(function (resp) {
+      if (!resp.ok) { var e = new Error('put ' + resp.status); e.status = resp.status; throw e; }
+    }, function () { var e2 = new Error('put network'); e2.status = 0; throw e2; });
+  }
+  function eachSeq(list, fn) {
+    var p = Promise.resolve();
+    list.forEach(function (x, i) { p = p.then(function () { return fn(x, i); }); });
+    return p;
+  }
+
+  function runUpload() {
+    if (state.busy || !state.staged.length) return;
+    var kind = els.addKind.value;
+    var target = currentTarget();
+    var codes = linkCodes(currentPrimary(), addPicker.getCodes());
+    var batch = state.staged.slice();
+    var useAi = els.addAi.checked && kind !== 'photo';
+    var resized = [];
+    var cappedShown = false;
+    state.busy = true;
+    els.uploadBtn.disabled = true;
+    eachSeq(batch, function (s, i) {
+      setNote(els.addNote, 'กำลังย่อรูป ' + (i + 1) + '/' + batch.length + '...', '');
+      return resizeImage(s.file).then(function (r) { resized.push(r); });
+    }).then(function () {
+      setNote(els.addNote, 'กำลังขอที่อัปโหลด...', '');
+      return api(uploadBeginBody(target, batch.length));
+    }).then(function (data) {
+      var slots = rowsOf(data);
+      if (slots.length !== batch.length) { var e = new Error('slots'); e.status = 500; throw e; }
+      return eachSeq(batch, function (s, i) {
+        setNote(els.addNote, 'กำลังอัปโหลดรูป ' + (i + 1) + '/' + batch.length + '...', '');
+        return putBlob(slots[i].uploadUrl, resized[i].main).then(function () {
+          return putBlob(slots[i].thumbUploadUrl, resized[i].thumb);
+        }).then(function () {
+          var review = {
+            id: s.id, previewUrl: s.previewUrl, path: slots[i].path, thumbPath: slots[i].thumbPath,
+            width: resized[i].width, height: resized[i].height, kind: kind, codes: codes, target: target,
+            title: '', text: '', certNo: '', validUntil: '', aiNote: '', saved: false
+          };
+          state.reviews.push(review);
+          return review;
+        });
+      }).then(function () {
+        return eachSeq(state.reviews.filter(function (r) { return !r.read && !r.saved && r.kind !== 'photo'; }), function (r, i, all) {
+          if (!useAi || cappedShown) return null;
+          setNote(els.addNote, 'AI กำลังอ่านรูป ' + (i + 1) + '...', '');
+          return readWithAi(r).then(function (capped) { if (capped) cappedShown = true; });
+        });
+      });
+    }).then(function () {
+      state.staged = state.staged.filter(function (s) { return !batch.some(function (b) { return b.id === s.id; }); });
+      renderStaged();
+      renderReviews();
+      setNote(els.addNote, cappedShown ? CAPPED_TEXT : 'อัปโหลดแล้ว ตรวจข้อมูลด้านล่างแล้วกดบันทึก', cappedShown ? 'warn' : 'ok');
+    }, function (err) {
+      var done = state.reviews.length;
+      state.staged = state.staged.filter(function (s) { return !state.reviews.some(function (r) { return r.id === s.id; }); });
+      renderStaged();
+      renderReviews();
+      setNote(els.addNote, failText(err) + (done ? ' (รูปที่อัปโหลดแล้ว ' + done + ' รูปยังบันทึกได้ด้านล่าง)' : ''), 'err');
+    }).then(function () {
+      state.busy = false;
+      els.uploadBtn.disabled = !state.staged.length;
+    });
+  }
+  // Calls file.read for one review card and fills its fields. Resolves true when the daily AI cap is hit.
+  function readWithAi(r) {
+    return api(fileReadBody(r.path)).then(function (data) {
+      var res = readResult(data);
+      r.read = true;
+      if (res.capped) { r.aiNote = CAPPED_TEXT; return true; }
+      r.text = res.text;
+      if (r.kind === 'cert') { r.certNo = res.certNo; r.validUntil = res.validUntil; }
+      if (!r.title && res.productName) r.aiNote = 'AI อ่านชื่อสินค้าได้: ' + res.productName;
+      return false;
+    }, function (err) {
+      r.read = true;
+      r.aiNote = 'AI อ่านไม่สำเร็จ (' + failText(err) + ') กรอกเองได้';
+      return false;
+    });
+  }
+
+  function renderReviews() {
+    clear(els.reviews);
+    state.reviews.forEach(function (r) {
+      if (r.saved) return;
+      els.reviews.appendChild(makeReview(r));
+    });
+  }
+  function makeReview(r) {
+    var card = el('div', 'review');
+    var top = add(card, 'div', 'review-top');
+    var imgBox = add(top, 'div', 'review-img');
+    var im = document.createElement('img');
+    im.alt = 'รูปที่อัปโหลดแล้ว';
+    im.src = r.previewUrl;
+    imgBox.appendChild(im);
+    var form = add(top, 'div', 'review-form');
+    var idp = 'rv' + r.id + '-';
+    var lb = add(form, 'label', 'lbl', 'ประเภท');
+    lb.setAttribute('for', idp + 'kind');
+    // ds-allow-native-select: native select keeps keyboard and screen-reader behaviour on old Edge 109
+    var kindSel = add(form, 'select', 'input');
+    kindSel.id = idp + 'kind';
+    fillKindSelect(kindSel, r.kind);
+    add(form, 'label', 'lbl', 'ชื่อไฟล์ (ไม่ใส่ ระบบใช้ชื่อประเภท)').setAttribute('for', idp + 'title');
+    var titleIn = add(form, 'input', 'input');
+    titleIn.id = idp + 'title';
+    titleIn.type = 'text';
+    titleIn.maxLength = 120;
+    titleIn.value = r.title;
+    add(form, 'label', 'lbl', 'ข้อความในรูป (ไม่บังคับ ตรวจและแก้ได้)').setAttribute('for', idp + 'text');
+    var textIn = add(form, 'textarea', 'input');
+    textIn.id = idp + 'text';
+    textIn.rows = 5;
+    textIn.value = r.text;
+    var certBox = add(form, 'div', 'cert-fields');
+    add(certBox, 'label', 'lbl', 'เลขที่ใบรับรอง').setAttribute('for', idp + 'no');
+    var noIn = add(certBox, 'input', 'input');
+    noIn.id = idp + 'no';
+    noIn.type = 'text';
+    noIn.value = r.certNo;
+    add(certBox, 'label', 'lbl', 'ใช้ได้ถึงวันที่ (ค.ศ.)').setAttribute('for', idp + 'date');
+    var dateIn = add(certBox, 'input', 'input');
+    dateIn.id = idp + 'date';
+    dateIn.type = 'date';
+    dateIn.value = r.validUntil;
+    function sync() {
+      r.kind = kindSel.value; r.title = titleIn.value; r.text = textIn.value; r.certNo = noIn.value; r.validUntil = dateIn.value;
+      certBox.hidden = r.kind !== 'cert';
+    }
+    [kindSel, titleIn, textIn, noIn, dateIn].forEach(function (n) { n.addEventListener('input', sync); n.addEventListener('change', sync); });
+    sync();
+    if (r.aiNote) add(form, 'p', 'note ' + (r.aiNote === CAPPED_TEXT ? 'warn' : ''), r.aiNote);
+    add(form, 'p', 'note', !r.codes.length ? 'ยังไม่แสดงให้สาขา จนกว่าจะใส่รหัสให้รายการนี้' : (r.codes.length > 1 ? 'จะใช้กับ ' + r.codes.length + ' รหัส: ' + r.codes.join(', ') : 'จะใช้กับรหัส ' + r.codes[0]));
+    var actions = add(form, 'div', 'actions');
+    var save = add(actions, 'button', 'btn', 'บันทึกรูปนี้');
+    save.type = 'button';
+    var drop = add(actions, 'button', 'btn alt', 'ไม่เก็บรูปนี้');
+    drop.type = 'button';
+    var note = add(form, 'p', 'note', '');
+    note.setAttribute('role', 'status');
+    save.addEventListener('click', function () {
+      sync();
+      if (isIsoDate(r.validUntil) === false && r.validUntil) { setNote(note, 'วันที่ไม่ถูกต้อง', 'err'); return; }
+      if (normalizeText(r.text).trim().length > NOTE_MAX) { setNote(note, 'ข้อความยาวเกิน ' + formatInt(NOTE_MAX) + ' ตัวอักษร', 'err'); return; }
+      if (state.busy) return;
+      state.busy = true;
+      save.disabled = true;
+      setNote(note, 'กำลังบันทึก...', '');
+      api(fileAddPictureBody(r.target, r)).then(function () {
+        r.saved = true;
+        renderReviews();
+        return reloadItem().then(function () { loadLog(true); setNote(els.addNote, 'บันทึกแล้ว', 'ok'); });
+      }, function (err) {
+        save.disabled = false;
+        setNote(note, failText(err), 'err');
+      }).then(function () { state.busy = false; });
+    });
+    drop.addEventListener('click', function () {
+      confirmBox('ไม่เก็บรูปนี้', 'รูปที่อัปโหลดแล้วจะไม่ถูกผูกกับรหัสใด', 'ไม่เก็บ', true).then(function (ok) {
+        if (!ok) return;
+        r.saved = true;
+        renderReviews();
+      });
+    });
+    return card;
+  }
+
+  // ---------- Text Note ----------
+  function updateCounter() {
+    var n = normalizeText(els.noteText.value).length;
+    els.noteCounter.textContent = counterText(n, NOTE_MAX);
+    var tone = counterTone(n, NOTE_MAX);
+    els.noteCounter.className = 'counter' + (tone ? ' ' + tone : '');
+    els.saveNote.disabled = n > NOTE_MAX;
+  }
+  function saveNote() {
+    if (state.busy) return;
+    var chk = noteCheck(els.noteText.value);
+    if (!chk.ok) { setNote(els.noteNote, chk.text, 'err'); els.noteText.focus(); return; }
+    var body = fileAddNoteBody(currentTarget(), {
+      kind: els.noteKind.value, title: els.noteTitle.value, text: chk.text, codes: notePicker.getCodes()
+    });
+    state.busy = true;
+    els.saveNote.disabled = true;
+    setNote(els.noteNote, 'กำลังบันทึก...', '');
+    api(body).then(function () {
+      els.noteText.value = '';
+      els.noteTitle.value = '';
+      notePicker.reset();
+      updateCounter();
+      return reloadItem().then(function () { loadLog(true); setNote(els.noteNote, 'บันทึกแล้ว', 'ok'); });
+    }, function (err) {
+      setNote(els.noteNote, failText(err), 'err');
+    }).then(function () { state.busy = false; updateCounter(); });
+  }
+
+  // ---------- Change Log and trash ----------
+  function loadLog(reset) {
+    if (state.mode !== 'code') return;
+    if (reset) { state.logPage = 1; clear(els.logList); }
+    api(logListBody(state.code, state.logPage)).then(function (data) {
+      var rows = rowsOf(data);
+      rows.forEach(function (row) {
+        var li = add(els.logList, 'li', '');
+        add(li, 'div', 'when', thaiDateTime(row.at) + (row.code ? ' · รหัส ' + row.code : ''));
+        var line = add(li, 'div', '');
+        add(line, 'span', 'who', String(row.n || row.u || '-'));
+        add(line, 'span', '', ' ' + actionLabel(row.action));
+        var sum = logSummary(row);
+        if (sum) add(li, 'div', 'sum', sum);
+      });
+      els.logMore.hidden = rows.length < 50;
+      setNote(els.logNote, els.logList.children.length ? '' : 'ยังไม่มีประวัติการแก้ไขของรหัสนี้', '');
+    }, function (err) {
+      setNote(els.logNote, failText(err), 'err');
+    });
+  }
+  function loadTrash(reset) {
+    if (reset) { state.trashPage = 1; clear(els.trashList); }
+    api(trashListBody(state.trashPage)).then(function (data) {
+      var rows = rowsOf(data);
+      rows.forEach(function (row) {
+        var f = normalizeFile(row);
+        if (!f) return;
+        var li = add(els.trashList, 'li', '');
+        var wrap = add(li, 'div', 'trash-row');
+        var info = add(wrap, 'div', '');
+        add(info, 'div', 'who', f.title + ' (' + kindLabel(f.kind) + ')');
+        var by = row.deletedBy || row.deleted_by || '';
+        var at = row.deletedAt || row.deleted_at || '';
+        add(info, 'div', 'when', (f.codes.length ? 'รหัส ' + f.codes.join(', ') : '') + (at ? ' · ลบเมื่อ ' + thaiDateTime(at) : '') + (by ? ' โดย ' + by : ''));
+        var b = add(wrap, 'button', 'btn alt small', 'กู้คืน');
+        b.type = 'button';
+        b.addEventListener('click', function () {
+          b.disabled = true;
+          api(fileRestoreBody(f.id)).then(function () {
+            setNote(els.trashNote, 'กู้คืนแล้ว', 'ok');
+            loadTrash(true);
+            if (state.code) { reloadItem().then(function () { loadLog(true); }); }
+          }, function (err) {
+            b.disabled = false;
+            setNote(els.trashNote, failText(err), 'err');
+          });
+        });
+      });
+      els.trashMore.hidden = rows.length < 50;
+      if (!els.trashList.children.length) setNote(els.trashNote, 'ถังขยะว่าง', '');
+      else if (els.trashNote.textContent === 'ถังขยะว่าง') setNote(els.trashNote, '', '');
+    }, function (err) {
+      setNote(els.trashNote, failText(err), 'err');
+    });
+  }
+
+  // ---------- start ----------
+  function startPage() {
+    var stored = loadStored();
+    if (!isSessionValid(stored, Date.now())) {
+      clearStored();
+      showDenied(NO_SESSION_TEXT);
+      return;
+    }
+    if (!canManageOf(stored)) { showDenied(DENIED_TEXT); return; }
+    state.sess = stored;
+    var staff = stored.staff || {};
+    els.who.textContent = (staff.n || '') + (staff.un ? ' · ' + staff.un : '');
+    els.app.hidden = false;
+    els.trashPanel.hidden = stored.isAdmin !== true;
+    fillKindSelect(els.addKind, 'photo');
+    fillKindSelect(els.noteKind, 'spec');
+    addPicker = createPicker(els.addCodes, 'addCodesSearch');
+    notePicker = createPicker(els.noteCodes, 'noteCodesSearch');
+    buildTabs();
+    loadReview();
+    updateCounter();
+    els.codeInput.focus();
+    var pre = new URLSearchParams(window.location.search).get('code');
+    if (pre && isCode(pre)) { els.codeInput.value = pre; openCode(pre); }
+  }
+
+  els.openBtn.addEventListener('click', function () { openCode(els.codeInput.value); });
+  els.codeInput.addEventListener('keydown', function (e) {
+    if (e.key === 'Enter') { e.preventDefault(); openCode(els.codeInput.value); }
+  });
+  els.saveItem.addEventListener('click', saveItem);
+  els.resetItem.addEventListener('click', resetItem);
+  els.drop.addEventListener('click', function () { els.picker.click(); });
+  els.picker.addEventListener('change', function () { addFiles(els.picker.files); els.picker.value = ''; });
+  ['dragenter', 'dragover'].forEach(function (t) {
+    els.drop.addEventListener(t, function (e) { e.preventDefault(); els.drop.classList.add('over'); });
+  });
+  ['dragleave', 'drop'].forEach(function (t) {
+    els.drop.addEventListener(t, function (e) { e.preventDefault(); els.drop.classList.remove('over'); });
+  });
+  els.drop.addEventListener('drop', function (e) {
+    if (e.dataTransfer && e.dataTransfer.files) addFiles(e.dataTransfer.files);
+  });
+  document.addEventListener('paste', function (e) {
+    if (els.product.hidden || dialogOpen) return;
+    var cd = e.clipboardData;
+    if (!cd || !cd.files || !cd.files.length) return;
+    var pics = [];
+    for (var i = 0; i < cd.files.length; i++) if (cd.files[i].type.indexOf('image/') === 0) pics.push(cd.files[i]);
+    if (!pics.length) return;
+    e.preventDefault();
+    addFiles(pics);
+  });
+  els.uploadBtn.addEventListener('click', runUpload);
+  els.clearStaged.addEventListener('click', function () {
+    state.staged.forEach(function (s) { try { URL.revokeObjectURL(s.previewUrl); } catch (e) { /* ignore */ } });
+    state.staged = [];
+    renderStaged();
+    setNote(els.addNote, '', '');
+  });
+  els.reviewPrev.addEventListener('click', function () { if (state.reviewPage > 1) { state.reviewPage--; loadReview(); } });
+  els.reviewNext.addEventListener('click', function () { state.reviewPage++; loadReview(); });
+  els.newDraftBtn.addEventListener('click', newDraft);
+  els.saveDraft.addEventListener('click', saveDraft);
+  els.deleteDraft.addEventListener('click', deleteDraft);
+  els.assignOpen.addEventListener('click', openAssign);
+  els.assignCancel.addEventListener('click', closeAssign);
+  els.assignConfirm.addEventListener('click', confirmAssign);
+  els.assignCode.addEventListener('input', renderAssignInfo);
+  els.assignCode.addEventListener('keydown', function (e) { if (e.key === 'Enter') { e.preventDefault(); confirmAssign(); } });
+  els.useNav.addEventListener('click', useNavName);
+  els.noteText.addEventListener('input', updateCounter);
+  els.saveNote.addEventListener('click', saveNote);
+  els.logMore.addEventListener('click', function () { state.logPage++; loadLog(false); });
+  els.trashLoad.addEventListener('click', function () { loadTrash(true); });
+  els.trashMore.addEventListener('click', function () { state.trashPage++; loadTrash(false); });
+  guardLink(els.backLink);
+
+  startPage();
+})();
+</script>
+</body>
+</html>

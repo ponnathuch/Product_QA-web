@@ -656,6 +656,24 @@
     return { action: 'item.update', code: code, name: String(name).trim(), details: String(details).trim() };
   }
   function itemResetBody(code) { return { action: 'item.reset', code: code }; }
+  function fileCheckHashBody(sha256, code) { var b = { action: 'file.check_hash', sha256: sha256 }; if (code) b.code = String(code); return b; }
+  // Where a picture with the same bytes already is: matches = [{ code, title, document_id }] from file.check_hash.
+  function duplicateText(name, matches) {
+    var m = matches && matches[0];
+    if (!m) return '';
+    var where = m.code ? 'รหัส ' + m.code : 'รายการที่ยังไม่มีรหัส';
+    return (name ? name + ': ' : '') + 'มีรูปนี้ในรหัสนี้แล้ว (' + where + ')';
+  }
+  // The same picture twice in one selection counts as a duplicate of its first copy.
+  function duplicateFlags(hashes) {
+    var seen = {};
+    return hashes.map(function (h) {
+      if (!h) return false;
+      if (seen[h]) return true;
+      seen[h] = true;
+      return false;
+    });
+  }
   function uploadBeginBody(target, count) { return withTarget({ action: 'upload.begin', count: count }, target); }
   function fileReadBody(path) { return { action: 'file.read', path: path }; }
   // Picture: p = { kind, title, path, thumbPath, width, height, text, certNo, validUntil, codes }.
@@ -667,6 +685,8 @@
     if (text) body.text = text;
     var cf = certFields(body.kind, p.certNo, p.validUntil);
     for (var k in cf) body[k] = cf[k];
+    if (p.sourceSha256) body.source_sha256 = p.sourceSha256;
+    if (p.sourceName) body.source_name = p.sourceName;
     return withCodes(body, primaryOf(target), p.codes);
   }
   // Text Note: n = { kind, title, text, certNo, validUntil, codes }.
@@ -942,7 +962,8 @@
     return {
       id: base.id, previewUrl: base.previewUrl, path: base.path, thumbPath: base.thumbPath, width: base.width, height: base.height,
       codes: base.codes, target: base.target, kind: auto ? 'other' : kindOf(kindValue), title: '', text: '', certNo: '', validUntil: '',
-      aiNote: '', error: '', read: false, saved: false, dropped: false, needsPick: auto, auto: auto
+      aiNote: '', error: '', read: false, saved: false, dropped: false, needsPick: auto, auto: auto,
+      sourceSha256: base.sourceSha256 || null, sourceName: base.sourceName || null
     };
   }
   // Changes to a row after file.read (or after a failed or capped reading). Cert fields only for kind cert.
@@ -2125,6 +2146,22 @@
       });
     });
   }
+  function fileSha256(file) {
+    if (!file || typeof file.arrayBuffer !== 'function' || !window.crypto || !window.crypto.subtle) {
+      return Promise.resolve(null);
+    }
+    return file.arrayBuffer().then(function (buf) {
+      return crypto.subtle.digest('SHA-256', buf);
+    }).then(function (digest) {
+      var arr = new Uint8Array(digest);
+      var hex = '';
+      for (var i = 0; i < arr.length; i++) {
+        var h = arr[i].toString(16);
+        hex += (h.length === 1 ? '0' : '') + h;
+      }
+      return hex;
+    }).catch(function () { return null; });
+  }
   function putBlob(url, blob) {
     if (!isTrustedUploadUrl(url, SUPABASE_URL)) {
       var bad = new Error('upload url');
@@ -2150,16 +2187,40 @@
     var aiOn = els.addAi.checked;
     var resized = [];
     var newRows = [];
+    var dupNotes = [];
+    var dupBatch = [];
     state.busy = true;
     els.uploadBtn.disabled = true;
     setNote(els.saveAllNote, '', '');
     eachSeq(batch, function (s, i) {
       setNote(els.addNote, 'กำลังย่อรูป ' + (i + 1) + '/' + batch.length + '...', '');
-      return resizeImage(s.file).then(function (r) { resized.push(r); });
+      return Promise.all([resizeImage(s.file), fileSha256(s.file)]).then(function (res) {
+        resized.push(res[0]);
+        s.sha256 = res[1];
+        s.dup = false;
+      });
     }).then(function () {
+      // Skip a picture already on this code (added here or synced from the image folder) or twice in this selection.
+      // The same picture on another code is fine (a shipping table is shared by many beds), so only this code is checked.
+      setNote(els.addNote, 'กำลังตรวจรูปซ้ำ...', '');
+      var inBatch = duplicateFlags(batch.map(function (s) { return s.sha256; }));
+      return eachSeq(batch, function (s, i) {
+        if (!s.sha256) return null;
+        if (inBatch[i]) { dupNotes.push((s.file && s.file.name ? s.file.name + ': ' : '') + 'ซ้ำกับอีกรูปในชุดที่เลือก'); s.dup = true; return null; }
+        return api(fileCheckHashBody(s.sha256, currentPrimary())).then(function (r) {
+          if (r && r.exists) { dupNotes.push(duplicateText(s.file && s.file.name, r.matches)); s.dup = true; }
+        }, function () { /* a failed check never blocks the upload */ });
+      });
+    }).then(function () {
+      var keep = batch.map(function (s, i) { return i; }).filter(function (i) { return !batch[i].dup; });
+      dupBatch = batch.filter(function (s) { return s.dup; });
+      resized = keep.map(function (i) { return resized[i]; });
+      batch = keep.map(function (i) { return batch[i]; });
+      if (!batch.length) return null;
       setNote(els.addNote, 'กำลังขอที่อัปโหลด...', '');
       return api(uploadBeginBody(target, batch.length));
     }).then(function (data) {
+      if (data === null) return null;
       var slots = rowsOf(data);
       if (slots.length !== batch.length) { var e = new Error('slots'); e.status = 500; throw e; }
       return eachSeq(batch, function (s, i) {
@@ -2169,7 +2230,7 @@
         }).then(function () {
           var row = newRow({
             id: s.id, previewUrl: s.previewUrl, path: slots[i].path, thumbPath: slots[i].thumbPath,
-            width: resized[i].width, height: resized[i].height, codes: codes, target: target
+            width: resized[i].width, height: resized[i].height, codes: codes, target: target, sourceSha256: s.sha256 || null, sourceName: (s.file && s.file.name) ? s.file.name : null
           }, kindValue);
           state.reviews.push(row);
           newRows.push(row);
@@ -2186,10 +2247,12 @@
       });
     }).then(function () {
       var capped = newRows.some(function (r) { return r.aiNote === CAPPED_TEXT; });
-      state.staged = state.staged.filter(function (s) { return !batch.some(function (b) { return b.id === s.id; }); });
+      state.staged = state.staged.filter(function (s) { return !batch.some(function (b) { return b.id === s.id; }) && !dupBatch.some(function (b) { return b.id === s.id; }); });
       renderStaged();
       renderReviews();
-      setNote(els.addNote, capped ? CAPPED_TEXT : 'อัปโหลดแล้ว ตรวจรายการด้านล่างแล้วกด "บันทึกทั้งหมด"', capped ? 'warn' : 'ok');
+      var dupLine = dupNotes.length ? ' ข้ามรูปซ้ำ ' + dupNotes.length + ' รูป: ' + dupNotes.slice(0, 3).join(' · ') + (dupNotes.length > 3 ? ' ...' : '') : '';
+      if (!newRows.length && dupNotes.length) setNote(els.addNote, 'ไม่ได้อัปโหลด' + dupLine, 'warn');
+      else setNote(els.addNote, (capped ? CAPPED_TEXT : 'อัปโหลดแล้ว ตรวจรายการด้านล่างแล้วกด "บันทึกทั้งหมด"') + dupLine, capped || dupNotes.length ? 'warn' : 'ok');
     }, function (err) {
       var done = state.reviews.length;
       state.staged = state.staged.filter(function (s) { return !state.reviews.some(function (r) { return r.id === s.id; }); });

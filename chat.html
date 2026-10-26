@@ -1,0 +1,1369 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>ถามสินค้า / IT</title>
+<link rel="stylesheet" href="pqa-theme.css?v=1">
+<style>
+  /* Page layout only. Colours, fonts, radii, spacing and focus come from pqa-theme.css tokens. */
+  html, body { height: 100%; }
+  body { display: flex; flex-direction: column; height: 100vh; height: 100dvh; overflow: hidden; }
+  #app { display: flex; flex-direction: column; flex: 1; min-height: 0; }
+  .top { padding: var(--space-3) var(--space-4); }
+  .top-inner { max-width: var(--max-narrow); }
+  .title h1 { font-size: var(--fs-l); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .title p { font-size: var(--fs-xs); }
+  button.top-link { border: 0; cursor: pointer; }
+  #who {
+    display: flex; align-items: center; gap: var(--space-2);
+    background: var(--c-on-header-soft); border-radius: var(--radius-pill);
+    padding: var(--space-1) var(--space-3) var(--space-1) var(--space-1); font-size: var(--fs-s); max-width: 34%;
+  }
+  #who:empty { display: none; }
+  .avatar {
+    width: var(--size-avatar); height: var(--size-avatar); flex: 0 0 var(--size-avatar); border-radius: 50%;
+    background: var(--c-on-header); color: var(--c-header-1); font-weight: bold;
+    display: flex; align-items: center; justify-content: center; font-size: var(--fs-s);
+  }
+  .who-text { min-width: 0; line-height: 1.25; }
+  .who-name, .who-unit { display: block; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .who-unit { opacity: 0.88; font-size: var(--fs-xs); }
+
+  #notice { max-width: var(--max-narrow); width: 100%; margin: var(--space-3) auto 0; padding: 0 var(--space-4); }
+  #msg { display: flex; gap: var(--space-3); align-items: flex-start; }
+  #msg .msg-icon { flex: 0 0 var(--size-icon); width: var(--size-icon); height: var(--size-icon); margin-top: var(--space-0); }
+  #msg.error { color: var(--c-err); font-weight: bold; }
+  #msg.info { color: var(--c-ink-2); }
+  #unsupported { max-width: var(--max-narrow); margin: var(--space-5) auto; padding: var(--space-4); }
+  #unsupported p { margin: var(--space-2) 0 0; }
+
+  /* ---------- thread ---------- */
+  #thread { flex: 1; min-height: 0; overflow-y: auto; overscroll-behavior: contain; padding: var(--space-4) var(--space-4) var(--space-3); }
+  .thread-in { max-width: var(--max-narrow); margin: 0 auto; display: flex; flex-direction: column; gap: var(--space-3); }
+  .intro { text-align: center; padding: var(--space-5) var(--space-4); color: var(--c-ink-3); }
+  .intro svg { width: var(--size-empty); height: var(--size-empty); color: var(--c-line-strong); }
+  .intro .intro-title { font-size: var(--fs-l); font-weight: bold; color: var(--c-ink); margin-top: var(--space-2); }
+  .intro p { margin: var(--space-1) 0 0; font-size: var(--fs-s); }
+  .turn { display: flex; flex-direction: column; gap: var(--space-2); }
+  .row-user { align-self: flex-end; max-width: 88%; display: flex; flex-direction: column; align-items: flex-end; gap: var(--space-2); }
+  .row-sys { align-self: flex-start; width: 100%; max-width: 100%; display: flex; flex-direction: column; gap: var(--space-2); }
+  .bubble { border-radius: var(--radius-l); padding: var(--space-3) var(--space-4); word-break: break-word; overflow-wrap: anywhere; }
+  .bubble p { margin: 0 0 var(--space-2); font-size: var(--fs-m); }
+  .bubble p:last-child { margin-bottom: 0; }
+  .bubble p.gap { height: 0.6em; margin: 0; }
+  .b-user { background: var(--c-brand); color: var(--c-on-brand); border-bottom-right-radius: var(--space-1); }
+  .b-sys { background: var(--c-surface); color: var(--c-ink); border: 1px solid var(--c-line); box-shadow: var(--shadow-1); border-bottom-left-radius: var(--space-1); max-width: 94%; }
+  .b-sys.error { background: var(--c-err-soft); border-color: var(--c-err-line); color: var(--c-err); }
+  .b-sys.wait { color: var(--c-ink-3); }
+  .b-sys.wait::before {
+    content: ""; display: inline-block; width: var(--space-2); height: var(--space-2); margin-right: var(--space-2);
+    border-radius: 50%; background: var(--c-brand); animation: pulse var(--dur-shimmer) infinite ease-in-out;
+  }
+  @keyframes pulse { 0%, 100% { opacity: 0.25; } 50% { opacity: 1; } }
+  .user-pics { display: flex; gap: var(--space-2); flex-wrap: wrap; justify-content: flex-end; }
+  .user-pics img { width: var(--size-strip-h); height: var(--size-strip-h); object-fit: cover; border-radius: var(--radius-s); border: 1px solid var(--c-line); background: var(--c-img-backing); }
+
+  .pic-text { max-width: 100%; background: var(--c-surface-2); border: 1px dashed var(--c-line-strong); border-radius: var(--radius-m); padding: var(--space-2) var(--space-3); font-size: var(--fs-s); color: var(--c-ink-2); }
+  .pic-text b { display: block; color: var(--c-ink); }
+  .pic-text .pic-body { white-space: pre-wrap; margin: var(--space-1) 0 var(--space-2); }
+  .pic-text textarea { width: 100%; min-height: calc(var(--size-target-lg) * 2); padding: var(--space-2) var(--space-3); border: 1px solid var(--c-line-strong); border-radius: var(--radius-s); background: var(--c-surface); color: var(--c-ink); font-size: var(--fs-s); resize: vertical; }
+  .btn-row { display: flex; gap: var(--space-2); flex-wrap: wrap; margin-top: var(--space-2); }
+  .btn.small { min-height: var(--size-target); padding: var(--space-1) var(--space-3); font-size: var(--fs-s); }
+
+  .topic-wrap { position: relative; display: inline-block; margin-bottom: var(--space-2); }
+  .topic-btn {
+    display: inline-flex; align-items: center; gap: var(--space-1); min-height: var(--size-target);
+    border: 1px solid var(--c-brand-line); background: var(--c-surface-2); color: var(--c-brand-strong);
+    border-radius: var(--radius-pill); padding: var(--space-1) var(--space-3); font-size: var(--fs-xs); cursor: pointer;
+  }
+  .topic-btn:hover { background: var(--c-brand-soft); border-color: var(--c-brand); }
+  .topic-btn:disabled { opacity: 0.55; cursor: not-allowed; }
+  .topic-btn svg { width: var(--size-icon-s); height: var(--size-icon-s); }
+  .topic-menu {
+    position: absolute; left: 0; top: 100%; z-index: 5; min-width: calc(var(--size-field)); margin-top: var(--space-1);
+    background: var(--c-surface); border: 1px solid var(--c-line-strong); border-radius: var(--radius-m);
+    box-shadow: var(--shadow-1); padding: var(--space-1); display: flex; flex-direction: column;
+  }
+  .topic-menu button {
+    min-height: var(--size-target); text-align: left; border: 0; background: transparent; color: var(--c-ink);
+    border-radius: var(--radius-s); padding: var(--space-1) var(--space-3); font-size: var(--fs-s); cursor: pointer;
+  }
+  .topic-menu button:hover { background: var(--c-brand-soft); }
+  .topic-menu button[aria-checked="true"] { font-weight: bold; color: var(--c-brand-strong); }
+  .menu-hint { padding: var(--space-1) var(--space-3); font-size: var(--fs-xs); color: var(--c-ink-3); }
+
+  .src { margin-top: var(--space-3); padding-top: var(--space-2); border-top: 1px solid var(--c-line); font-size: var(--fs-s); color: var(--c-ink-2); }
+  .src b { color: var(--c-ink); }
+  .src ul { margin: var(--space-1) 0 0; padding-left: var(--space-5); }
+  .note-box {
+    display: flex; gap: var(--space-2); align-items: flex-start; flex-wrap: wrap; margin-top: var(--space-3);
+    padding: var(--space-2) var(--space-3); background: var(--c-warn-soft); border: 1px solid var(--c-warn-line);
+    border-radius: var(--radius-s); color: var(--c-warn); font-size: var(--fs-s);
+  }
+  .link-btn { border: 0; background: transparent; color: var(--c-brand-strong); text-decoration: underline; cursor: pointer; font-size: var(--fs-s); padding: var(--space-1) var(--space-2); min-height: var(--size-target); }
+  .answer-note { font-size: var(--fs-xs); color: var(--c-ink-3); margin-top: var(--space-2); }
+
+  .fb { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-2); margin: var(--space-2) var(--space-1) 0; font-size: var(--fs-s); color: var(--c-ink-2); }
+  .fb-btn {
+    display: inline-flex; align-items: center; gap: var(--space-2); min-height: var(--size-target);
+    border: 1px solid var(--c-line-strong); background: var(--c-surface); color: var(--c-ink-2);
+    border-radius: var(--radius-pill); padding: var(--space-1) var(--space-4); font-size: var(--fs-s); cursor: pointer;
+  }
+  .fb-btn svg { width: var(--size-icon-s); height: var(--size-icon-s); flex: 0 0 var(--size-icon-s); }
+  .fb-btn:hover { border-color: var(--c-brand); color: var(--c-brand-strong); }
+  .fb-btn:disabled { cursor: not-allowed; opacity: 0.6; }
+  .fb-btn.sel { border-color: var(--c-brand); background: var(--c-brand-soft); color: var(--c-brand-strong); font-weight: bold; }
+  .fb-thanks { color: var(--c-ok); }
+  .fb-err { color: var(--c-err); }
+
+  /* ---------- simplified product cards ---------- */
+  .cards { display: flex; flex-direction: column; gap: var(--space-2); }
+  .card { background: var(--c-surface); border: 1px solid var(--c-line); border-radius: var(--radius-l); box-shadow: var(--shadow-1); padding: var(--space-3); }
+  .card-head { display: flex; align-items: center; gap: var(--space-2); margin-bottom: var(--space-1); flex-wrap: wrap; }
+  .code { font-family: var(--font-code); font-size: var(--fs-l); font-weight: bold; letter-spacing: 0.1em; color: var(--c-brand-strong); background: var(--c-brand-soft); border-radius: var(--radius-s); padding: var(--space-0) var(--space-3); }
+  .navtag { font-size: var(--fs-xs); color: var(--c-ink-2); background: var(--c-surface-2); border: 1px solid var(--c-line); border-radius: var(--radius-pill); padding: var(--space-0) var(--space-2); }
+  .filecount { font-size: var(--fs-xs); color: var(--c-ink-3); margin-left: auto; }
+  .card-body { display: flex; gap: var(--space-3); align-items: flex-start; }
+  .card-photo { flex: 0 0 var(--size-thumb); width: var(--size-thumb); height: var(--size-thumb); object-fit: contain; border: 1px solid var(--c-line); border-radius: var(--radius-m); background: var(--c-img-backing); }
+  .card-info { flex: 1; min-width: 0; }
+  .name { font-size: var(--fs-m); font-weight: bold; margin: 0 0 var(--space-1); }
+  .details { list-style: none; margin: 0; padding: 0; font-size: var(--fs-s); color: var(--c-ink-2); }
+  .details li { margin: var(--space-0) 0; }
+  .cite-line { font-size: var(--fs-xs); color: var(--c-ink-3); margin-top: var(--space-1); }
+  .cert { display: flex; gap: var(--space-3); align-items: flex-start; margin-top: var(--space-2); border: 1px solid; border-radius: var(--radius-s); padding: var(--space-2) var(--space-3); font-size: var(--fs-s); }
+  .cert b { display: block; }
+  .cert-dot { flex: 0 0 var(--space-3); width: var(--space-3); height: var(--space-3); margin-top: var(--space-1); border-radius: 50%; background: currentColor; }
+  .cert.ok { background: var(--c-ok-soft); color: var(--c-ok); border-color: var(--c-ok-line); }
+  .cert.warn { background: var(--c-warn-soft); color: var(--c-warn); border-color: var(--c-warn-line); }
+  .cert.err { background: var(--c-err-soft); color: var(--c-err); border-color: var(--c-err-line); }
+  .more { margin-top: var(--space-1); }
+  .more > summary {
+    display: flex; align-items: center; min-height: var(--size-target); cursor: pointer; list-style: none;
+    padding: var(--space-2) var(--space-3); margin-bottom: var(--space-2); border: 1px dashed var(--c-line-strong);
+    border-radius: var(--radius-m); color: var(--c-ink-2); background: var(--c-surface); font-size: var(--fs-s);
+  }
+  .more > summary::-webkit-details-marker { display: none; }
+  .more > summary::before { content: "+ "; font-weight: bold; color: var(--c-brand); white-space: pre; }
+  .more[open] > summary::before { content: "- "; }
+  .foot-link { font-size: var(--fs-xs); color: var(--c-ink-3); }
+  .foot-link a { color: var(--c-brand-strong); }
+
+  /* ---------- composer ---------- */
+  #composer { border-top: 1px solid var(--c-line); background: var(--c-surface); padding: var(--space-2) var(--space-4) var(--space-3); }
+  .comp-in { max-width: var(--max-narrow); margin: 0 auto; }
+  #thumbs { display: flex; gap: var(--space-2); flex-wrap: wrap; margin-bottom: var(--space-2); }
+  #thumbs:empty { display: none; }
+  .thumb-box { position: relative; width: var(--size-strip-h); height: var(--size-strip-h); }
+  .thumb-box img { width: 100%; height: 100%; object-fit: cover; border-radius: var(--radius-s); border: 1px solid var(--c-line-strong); }
+  .thumb-x {
+    position: absolute; top: calc(var(--space-2) * -1); right: calc(var(--space-2) * -1); width: var(--size-target); height: var(--size-target);
+    border-radius: 50%; border: 1px solid var(--c-line-strong); background: var(--c-surface); color: var(--c-ink); cursor: pointer; padding: 0;
+    display: flex; align-items: center; justify-content: center;
+  }
+  .thumb-x svg { width: var(--size-icon-s); height: var(--size-icon-s); }
+  .thumb-busy { width: var(--size-strip-h); height: var(--size-strip-h); border-radius: var(--radius-s); border: 1px dashed var(--c-line-strong); display: flex; align-items: center; justify-content: center; font-size: var(--fs-xs); color: var(--c-ink-3); }
+  .comp-row { display: flex; gap: var(--space-2); align-items: flex-end; }
+  .icon-btn {
+    flex: 0 0 var(--size-target-lg); width: var(--size-target-lg); height: var(--size-target-lg); padding: 0;
+    display: inline-flex; align-items: center; justify-content: center; cursor: pointer;
+    border: 1px solid var(--c-line-strong); border-radius: var(--radius-m); background: var(--c-surface); color: var(--c-ink-2);
+  }
+  .icon-btn:hover { border-color: var(--c-brand); color: var(--c-brand-strong); background: var(--c-brand-soft); }
+  .icon-btn:disabled { opacity: 0.55; cursor: not-allowed; }
+  .icon-btn svg { width: var(--size-icon); height: var(--size-icon); }
+  #q {
+    flex: 1; min-width: 0; min-height: var(--size-target-lg); max-height: calc(var(--size-target-lg) * 3); resize: none;
+    padding: var(--space-3); font-size: var(--fs-m); line-height: 1.4;
+    border: 1px solid var(--c-line-strong); border-radius: var(--radius-m); background: var(--c-surface); color: var(--c-ink);
+  }
+  #q::placeholder { color: var(--c-ink-3); }
+  #sendBtn { min-height: var(--size-target-lg); padding: 0 var(--space-4); gap: var(--space-2); }
+  #sendBtn svg { width: var(--size-icon); height: var(--size-icon); }
+  #hint { font-size: var(--fs-xs); color: var(--c-ink-3); margin: var(--space-1) 0 0; min-height: 1.3em; }
+  #hint.warn { color: var(--c-warn); }
+
+  /* ---------- my questions panel ---------- */
+  #panel { position: fixed; top: 0; right: 0; bottom: 0; width: min(100%, 26rem); z-index: 20; background: var(--c-page); border-left: 1px solid var(--c-line-strong); display: flex; flex-direction: column; box-shadow: var(--shadow-1); }
+  #panelHead { display: flex; align-items: center; gap: var(--space-2); padding: var(--space-3) var(--space-4); background: var(--c-surface); border-bottom: 1px solid var(--c-line); }
+  #panelHead h2 { flex: 1; margin: 0; font-size: var(--fs-l); }
+  #panelBody { flex: 1; overflow-y: auto; padding: var(--space-3) var(--space-4); display: flex; flex-direction: column; gap: var(--space-3); }
+  .oq { background: var(--c-surface); border: 1px solid var(--c-line); border-radius: var(--radius-m); padding: var(--space-3); }
+  .oq-q { font-weight: bold; margin: 0 0 var(--space-1); word-break: break-word; }
+  .oq-meta { display: flex; gap: var(--space-2); align-items: center; flex-wrap: wrap; font-size: var(--fs-xs); color: var(--c-ink-3); }
+  .state { font-size: var(--fs-xs); font-weight: bold; border-radius: var(--radius-pill); padding: var(--space-0) var(--space-2); border: 1px solid; }
+  .state.warn { color: var(--c-warn); background: var(--c-warn-soft); border-color: var(--c-warn-line); }
+  .state.ok { color: var(--c-ok); background: var(--c-ok-soft); border-color: var(--c-ok-line); }
+  .state.mute { color: var(--c-ink-3); background: var(--c-surface-2); border-color: var(--c-line-strong); }
+  .oq-art { margin-top: var(--space-2); padding: var(--space-2) var(--space-3); background: var(--c-surface-2); border-radius: var(--radius-s); font-size: var(--fs-s); }
+  .oq-art b { display: block; color: var(--c-ink); }
+  .oq-art p { margin: var(--space-1) 0 0; }
+  #panelList { display: flex; flex-direction: column; gap: var(--space-3); }
+  #panelStatus { color: var(--c-ink-3); font-size: var(--fs-s); }
+
+  @media (max-width: 520px) {
+    .top { padding: var(--space-2) var(--space-3); }
+    .top-inner { flex-wrap: wrap; gap: var(--space-2); }
+    .title { flex: 1 1 40%; }
+    .title p { display: none; }
+    #who { order: 3; flex: 1 1 100%; max-width: 100%; }
+    #thread { padding: var(--space-3) var(--space-3) var(--space-2); }
+    #composer { padding: var(--space-2) var(--space-3) var(--space-2); }
+    .row-user { max-width: 94%; }
+    .b-sys { max-width: 100%; }
+    .card-photo { flex-basis: var(--size-strip-h); width: var(--size-strip-h); height: var(--size-strip-h); }
+    #sendBtn .send-text { display: none; }
+    #sendBtn { padding: 0; width: var(--size-target-lg); }
+    .fb-btn { min-height: var(--size-target-lg); }
+    #hint .hint-keys { display: none; }
+  }
+  @media (prefers-reduced-motion: reduce) { .b-sys.wait::before { animation: none; } }
+</style>
+</head>
+<body>
+<div id="unsupported" class="panel" role="alert" hidden></div>
+
+<div id="app" hidden>
+<header class="top">
+  <div class="top-inner">
+    <div class="logo" aria-hidden="true">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/><path d="M9.5 9a2.5 2.5 0 0 1 5 0c0 1.5-2.5 2-2.5 3.5"/><path d="M12 15h.01"/></svg>
+    </div>
+    <div class="title">
+      <h1>ถามสินค้า / IT</h1>
+      <p>ตอบจากเอกสารสินค้าและบทความของทีมไอทีเท่านั้น</p>
+    </div>
+    <div id="who"></div>
+    <button type="button" id="mineBtn" class="top-link" aria-haspopup="dialog" hidden>คำถามของฉัน</button>
+    <a id="kbLink" class="top-link" href="kb.html" hidden>จัดการความรู้ IT</a>
+  </div>
+</header>
+
+<div id="notice" hidden><div id="msg" class="panel" role="status"></div></div>
+
+<div id="thread" role="log" aria-live="polite" aria-label="บทสนทนา" tabindex="-1">
+  <div class="thread-in" id="threadIn"></div>
+</div>
+
+<form id="composer" autocomplete="off" hidden>
+  <div class="comp-in">
+    <div id="thumbs" aria-label="รูปที่แนบ"></div>
+    <div class="comp-row">
+      <button type="button" id="camBtn" class="icon-btn" aria-label="ถ่ายรูปปัญหา" title="ถ่ายรูป"></button>
+      <button type="button" id="galBtn" class="icon-btn" aria-label="เลือกรูปจากเครื่อง" title="เลือกรูป"></button>
+      <textarea id="q" rows="1" maxlength="1000" enterkeyhint="send" placeholder="พิมพ์คำถาม หรือชื่อ/รหัสสินค้า หรืออาการปัญหา IT" aria-label="พิมพ์คำถาม"></textarea>
+      <button type="submit" id="sendBtn" class="btn" aria-label="ส่งคำถาม"><span class="send-text">ส่ง</span></button>
+    </div>
+    <p id="hint" role="status"><span class="hint-keys">Enter ส่ง · Shift+Enter ขึ้นบรรทัดใหม่ · </span>แนบรูปได้ 3 รูป ใช้กับคำถาม IT</p>
+    <input type="file" id="camInput" accept="image/*" capture="environment" hidden>
+    <input type="file" id="galInput" accept="image/*" multiple hidden>
+  </div>
+</form>
+
+<aside id="panel" role="dialog" aria-modal="false" aria-labelledby="panelTitle" hidden>
+  <div id="panelHead">
+    <h2 id="panelTitle">คำถามของฉัน</h2>
+    <button type="button" id="panelRefresh" class="btn alt small">รีเฟรช</button>
+    <button type="button" id="panelClose" class="btn alt small">ปิด</button>
+  </div>
+  <div id="panelBody"><div id="panelStatus" role="status"></div><div id="panelList"></div></div>
+</aside>
+</div>
+
+<script>
+/* Feature check: plain ES5 on purpose, so an old browser reaches it. */
+(function () {
+  // BEGIN PURE
+  var UNSUPPORTED_TEXT = 'เบราว์เซอร์นี้เก่าเกินไปสำหรับหน้านี้ กรุณาอัปเดต Google Chrome หรือ Microsoft Edge เป็นรุ่นล่าสุด แล้วเปิดหน้านี้ใหม่';
+  var FEATURE_NAMES = { promise: 'Promise', fetch: 'fetch', asyncFn: 'async function', optionalChaining: 'optional chaining', fileReader: 'FileReader', canvas: 'canvas' };
+  // env: { promise, fetch, asyncFn, optionalChaining, fileReader, canvas } booleans. Returns the names of missing features.
+  function missingFeatures(env) {
+    var out = [];
+    for (var k in FEATURE_NAMES) {
+      if (Object.prototype.hasOwnProperty.call(FEATURE_NAMES, k) && !(env && env[k])) out.push(FEATURE_NAMES[k]);
+    }
+    return out;
+  }
+  // END PURE
+  function canParse(src) {
+    try { new Function(src); return true; } catch (e) { return false; }
+  }
+  var canvasOk = false;
+  try { var cv = document.createElement('canvas'); canvasOk = !!(cv.getContext && cv.getContext('2d') && cv.toDataURL); } catch (e) { canvasOk = false; }
+  var missing = missingFeatures({
+    promise: typeof Promise !== 'undefined',
+    fetch: typeof fetch === 'function',
+    asyncFn: canParse('return (async function () { await 1; })'),
+    optionalChaining: canParse('return ({})?.a'),
+    fileReader: typeof FileReader !== 'undefined',
+    canvas: canvasOk
+  });
+  window.__pqaChatOk = missing.length === 0;
+  if (missing.length) {
+    var box = document.getElementById('unsupported');
+    box.textContent = UNSUPPORTED_TEXT;
+    box.hidden = false;
+  }
+})();
+</script>
+<script>
+(async function () {
+  if (!window.__pqaChatOk) return;
+  var SUPABASE_URL = 'https://zuyqwkjvjuwykrdhzhwq.supabase.co';
+  var TIMEOUT_MS = 15000;
+  var ASK_TIMEOUT_MS = 60000;
+  var STORE_KEY = 'pqa.session';
+  var SVG_NS = 'http://www.w3.org/2000/svg';
+
+  // BEGIN PURE
+  var MAX_HISTORY = 6;
+  var MAX_HISTORY_TEXT = 1200;
+  var MAX_Q = 1000;
+  var MAX_PICTURE_TEXT = 1500;
+  var MAX_IMAGES = 3;
+  var MAX_SIDE = 1280;
+  var JPEG_QUALITY = 0.8;
+  var MAX_IMAGE_BYTES = 700 * 1024;
+  var TOPICS = ['auto', 'product', 'it'];
+  var NO_ARTICLE_TEXT = 'ยังไม่มีคำตอบในฐานความรู้ IT ส่งเรื่องนี้ให้ทีมไอทีแล้ว ดูสถานะได้ที่ "คำถามของฉัน"';
+  var BUDGET_TEXT = 'วันนี้งบ AI ของหัวข้อ IT ถูกใช้หมดแล้ว ลองใหม่พรุ่งนี้ หรือติดต่อทีมไอทีโดยตรง';
+  var PROVIDER_TEXT = 'ระบบตอบไม่ได้ในขณะนี้ ลองถามอีกครั้ง';
+  var NOT_IN_CATALOG_TEXT = 'ไม่พบในเอกสารสินค้า ลองพิมพ์คำอื่น หรือใช้รหัสสินค้า 7 หลัก';
+  var PICTURE_TEXT_LABEL = 'ระบบอ่านจากรูปได้:';
+
+  function reasonMessage(reason) {
+    if (reason === 'expired') return 'ลิงก์หมดอายุ กรุณากดเมนู ถามข้อมูลสินค้า ใน Job Tracker อีกครั้ง';
+    if (reason === 'reused') return 'ลิงก์นี้ถูกใช้ไปแล้ว กรุณากดเมนูใน Job Tracker อีกครั้ง';
+    if (reason === 'malformed' || reason === 'bad_signature') return 'ลิงก์ไม่ถูกต้อง กรุณากดเมนูใน Job Tracker อีกครั้ง';
+    return 'ติดต่อเซิร์ฟเวอร์ไม่ได้ ลองใหม่อีกครั้ง';
+  }
+  function limitMessage(n) {
+    if (typeof n !== 'number' || !isFinite(n)) return 'วันนี้ถามครบจำนวนครั้งที่กำหนดแล้ว ถามใหม่ได้พรุ่งนี้';
+    return 'วันนี้ถามครบ ' + n + ' ครั้งแล้ว ถามใหม่ได้พรุ่งนี้';
+  }
+  // Error text for a failed ask call. status 0 = network / timeout.
+  function errorText(status, data) {
+    var code = data && typeof data === 'object' ? data.error : '';
+    if (status === 401) return reasonMessage('expired');
+    if (status === 429 && code === 'daily_limit') return limitMessage(data.limit);
+    if (status === 429) return 'ถามถี่เกินไป รอสักครู่แล้วลองใหม่';
+    if (status === 400) return 'ส่งคำถามไม่ได้ ตรวจข้อความหรือรูปที่แนบแล้วลองใหม่';
+    if (status === 502 && code === 'product_unavailable') return 'ระบบข้อมูลสินค้าไม่พร้อมใช้งานในขณะนี้ ลองใหม่อีกครั้ง';
+    if (status === 0) return 'ติดต่อเซิร์ฟเวอร์ไม่ได้ ตรวจอินเทอร์เน็ตแล้วลองใหม่';
+    return 'ระบบขัดข้อง ลองใหม่อีกครั้ง';
+  }
+  function isSessionValid(stored, now) {
+    if (!stored || typeof stored !== 'object') return false;
+    if (typeof stored.session !== 'string' || !stored.session) return false;
+    if (typeof stored.expiresAt !== 'number') return false;
+    return stored.expiresAt > now;
+  }
+  function getSsoParam(search) {
+    var v = new URLSearchParams(search).get('sso');
+    return v ? v : null;
+  }
+  function cleanUrl(pathname, search, hash) {
+    var params = new URLSearchParams(search);
+    params.delete('sso');
+    var rest = params.toString();
+    return pathname + (rest ? '?' + rest : '') + (hash || '');
+  }
+  function initialOf(name) {
+    var s = typeof name === 'string' ? name.trim() : '';
+    return s ? s.charAt(0) : '?';
+  }
+  // Split text into display lines; blank lines are kept as one empty entry (spacing).
+  function answerLines(text) {
+    if (typeof text !== 'string') return [];
+    var raw = text.replace(/\r\n?/g, '\n').split('\n');
+    var out = [];
+    for (var i = 0; i < raw.length; i++) {
+      var line = raw[i].trim();
+      if (line) out.push(line);
+      else if (out.length && out[out.length - 1] !== '') out.push('');
+    }
+    while (out.length && out[out.length - 1] === '') out.pop();
+    return out;
+  }
+  function feedbackBody(logId, value) {
+    return { logId: logId, value: value === -1 ? -1 : 1 };
+  }
+  function feedbackLabels(topic) {
+    if (topic === 'it') return { ask: 'ตรงปัญหาไหม', up: 'ตรงปัญหา', down: 'ไม่ตรง' };
+    return { ask: 'ข้อมูลนี้ถูกต้องไหม', up: 'ถูกต้อง', down: 'ไม่ถูกต้อง' };
+  }
+
+  // ---- history ----
+  // messages: [{ role, text, topic? }] -> last MAX_HISTORY with text only, each text capped.
+  function trimHistory(messages, max) {
+    var limit = max === undefined ? MAX_HISTORY : max;
+    var out = [];
+    var list = Array.isArray(messages) ? messages : [];
+    for (var i = 0; i < list.length; i++) {
+      var m = list[i];
+      if (!m || (m.role !== 'user' && m.role !== 'assistant')) continue;
+      var text = typeof m.text === 'string' ? m.text.trim() : '';
+      if (!text) continue;
+      var e = { role: m.role, text: text.length > MAX_HISTORY_TEXT ? text.slice(0, MAX_HISTORY_TEXT) : text };
+      if (m.role === 'assistant' && (m.topic === 'product' || m.topic === 'it')) e.topic = m.topic;
+      out.push(e);
+    }
+    return out.length > limit ? out.slice(out.length - limit) : out;
+  }
+  // turns: [{ q, reply: { text, topic } | null }]. Turns with no reply (pending, failed) add the question only
+  // when a later turn has a reply; an unanswered question is skipped so the model never sees a dangling user line.
+  function historyFromTurns(turns, upTo) {
+    var list = Array.isArray(turns) ? turns : [];
+    var end = upTo === undefined ? list.length : upTo;
+    var msgs = [];
+    for (var i = 0; i < end && i < list.length; i++) {
+      var t = list[i];
+      if (!t || !t.reply || !t.reply.text) continue;
+      msgs.push({ role: 'user', text: t.q || '' });
+      msgs.push({ role: 'assistant', text: t.reply.text, topic: t.reply.topic });
+    }
+    return trimHistory(msgs);
+  }
+
+  // ---- pictures ----
+  // Longest side capped at max, never enlarged, aspect kept.
+  function shrinkSize(w, h, max) {
+    var cap = max === undefined ? MAX_SIDE : max;
+    if (!(w > 0) || !(h > 0)) return { w: 0, h: 0 };
+    var longest = Math.max(w, h);
+    if (longest <= cap) return { w: Math.round(w), h: Math.round(h) };
+    var r = cap / longest;
+    return { w: Math.max(1, Math.round(w * r)), h: Math.max(1, Math.round(h * r)) };
+  }
+  // Bytes after base64 decoding.
+  function decodedBytes(b64) {
+    var s = typeof b64 === 'string' ? b64 : '';
+    var pad = s.endsWith('==') ? 2 : s.endsWith('=') ? 1 : 0;
+    return Math.max(0, Math.floor(s.length * 3 / 4) - pad);
+  }
+  function dataUrlToBase64(url) {
+    var i = typeof url === 'string' ? url.indexOf(',') : -1;
+    return i === -1 ? '' : url.slice(i + 1);
+  }
+  function roomForImages(have, adding) {
+    return Math.max(0, Math.min(adding, MAX_IMAGES - have));
+  }
+
+  // ---- request bodies ----
+  // turn: { q, topic ('auto'|'product'|'it'), images: [{ data }], pictureText }; history already trimmed.
+  function buildAskBody(turn, history) {
+    var q = String(turn && turn.q || '').trim();
+    var body = { q: q.length > MAX_Q ? q.slice(0, MAX_Q) : q };
+    var topic = turn && TOPICS.indexOf(turn.topic) !== -1 ? turn.topic : 'auto';
+    if (topic !== 'auto') body.topic = topic;
+    var hist = trimHistory(history);
+    if (hist.length) body.history = hist;
+    var pt = turn && typeof turn.pictureText === 'string' ? turn.pictureText.trim() : '';
+    if (pt) {
+      body.pictureText = pt.length > MAX_PICTURE_TEXT ? pt.slice(0, MAX_PICTURE_TEXT) : pt;
+    } else if (topic !== 'product' && turn && Array.isArray(turn.images) && turn.images.length) {
+      body.images = turn.images.slice(0, MAX_IMAGES).map(function (im) { return { mime: 'image/jpeg', data: im.data }; });
+    }
+    return body;
+  }
+  function buildKbBody(action, extra) {
+    var b = { action: action };
+    if (extra) { for (var k in extra) b[k] = extra[k]; }
+    return b;
+  }
+  function canSend(text, imageCount, busy) {
+    if (busy) return false;
+    return String(text || '').trim().length > 0 && imageCount >= 0;
+  }
+
+  // ---- topic label ----
+  function topicLabel(topic) {
+    if (topic === 'product') return 'สินค้า';
+    if (topic === 'it') return 'IT knowledge';
+    return 'อัตโนมัติ';
+  }
+  // Text on the label button of a reply: 'หัวข้อ: สินค้า' plus '(อัตโนมัติ)' when the system chose it.
+  function topicLabelText(topic, source) {
+    return 'หัวข้อ: ' + topicLabel(topic) + (source === 'auto' ? ' (อัตโนมัติ)' : '');
+  }
+  function topicMenuItems(current) {
+    return TOPICS.map(function (t) { return { value: t, label: topicLabel(t), checked: t === current }; });
+  }
+
+  // ---- product cards ----
+  var THAI_MONTHS = ['ม.ค.', 'ก.พ.', 'มี.ค.', 'เม.ย.', 'พ.ค.', 'มิ.ย.', 'ก.ค.', 'ส.ค.', 'ก.ย.', 'ต.ค.', 'พ.ย.', 'ธ.ค.'];
+  function thaiDate(iso) {
+    var m = /^(\d{4})-(\d{2})-(\d{2})/.exec(typeof iso === 'string' ? iso : '');
+    if (!m) return '';
+    var month = parseInt(m[2], 10);
+    var day = parseInt(m[3], 10);
+    if (month < 1 || month > 12 || day < 1 || day > 31) return '';
+    return day + ' ' + THAI_MONTHS[month - 1] + ' ' + (parseInt(m[1], 10) + 543);
+  }
+  // Timestamp -> '20 ต.ค. 2569 14:05' in Bangkok time.
+  function thaiDateTime(ts) {
+    var ms = Date.parse(ts);
+    if (isNaN(ms)) return '';
+    var iso = new Date(ms + 7 * 3600 * 1000).toISOString();
+    return thaiDate(iso.slice(0, 10)) + ' ' + iso.slice(11, 16);
+  }
+  function splitDetails(text) {
+    if (typeof text !== 'string') return [];
+    var out = [];
+    var parts = text.split(' | ');
+    for (var i = 0; i < parts.length; i++) {
+      var p = parts[i].split('**').join('').trim();
+      if (p) out.push(p);
+    }
+    return out;
+  }
+  function citationLine(c) {
+    if (!c || !c.documentTitle) return '';
+    if (c.page === null || c.page === undefined) return 'ที่มา: ' + c.documentTitle;
+    return 'ที่มา: ' + c.documentTitle + ' หน้า ' + c.page;
+  }
+  function isTrustedFileUrl(url, baseUrl) {
+    if (typeof url !== 'string' || !url) return false;
+    if (url.indexOf(baseUrl + '/storage/v1/object/sign/product-files/') === 0) return true;
+    return !/^[a-z][a-z0-9+.\-]*:/i.test(url) && url.indexOf('//') !== 0 && url.indexOf('..') === -1;
+  }
+  function splitByAnswer(items, answer) {
+    var list = Array.isArray(items) ? items : [];
+    if (typeof answer !== 'string') return { main: list, other: [] };
+    var codes = answer.match(/[0-9]{7}/g) || [];
+    var main = [];
+    var other = [];
+    for (var i = 0; i < list.length; i++) {
+      if (codes.indexOf(String(list[i].code)) !== -1) main.push(list[i]);
+      else other.push(list[i]);
+    }
+    if (!main.length) return { main: list, other: [] };
+    return { main: main, other: other };
+  }
+  var NAV_STOP = ['BLOCKALL', 'BLOCKPOS', 'WH-DISCON', 'DISCON', 'DEMO', 'MOVE'];
+  var NAV_WARN = ['PREPARE', 'TEMP-OOS', 'SHORTAGE', 'SHORT-EXP', 'HOSPITAL', 'NO RETURN', 'BLOCK-PO'];
+  function statusLevel(code, blocked) {
+    if (blocked === true) return 'stop';
+    var c = String(code === null || code === undefined ? '' : code).trim().toUpperCase();
+    if (c === '' || c === 'NORMAL') return 'none';
+    if (NAV_STOP.indexOf(c) !== -1) return 'stop';
+    if (NAV_WARN.indexOf(c) !== -1) return 'warn';
+    return 'info';
+  }
+  function navStatusView(ns) {
+    if (!ns || typeof ns !== 'object') return null;
+    var blocked = ns.blocked === true;
+    var level = statusLevel(ns.code, blocked);
+    if (level === 'none') return null;
+    var label = String(ns.desc || '').trim() || String(ns.code || '').trim();
+    if (blocked && statusLevel(ns.code, false) === 'none') label = '';
+    if (level === 'stop') {
+      var t = 'สินค้านี้ขายไม่ได้' + (label ? ': ' + label : '');
+      if (blocked) t += label ? ' · Blocked ใน NAV' : ' (Blocked ใน NAV)';
+      return { level: 'stop', tone: 'err', text: t };
+    }
+    if (!label) return null;
+    return { level: level, tone: level === 'warn' ? 'warn' : '', text: label };
+  }
+  function navSortRank(ns) {
+    if (!ns || typeof ns !== 'object') return 0;
+    var level = statusLevel(ns.code, ns.blocked === true);
+    if (level === 'stop') return 2;
+    return String(ns.code || '').trim().toUpperCase() === 'PREPARE' ? 1 : 0;
+  }
+  function sortByNavStatus(items) {
+    return items.map(function (it, i) { return { it: it, i: i, r: navSortRank(it && it.navStatus) }; })
+      .sort(function (a, b) { return a.r - b.r || a.i - b.i; })
+      .map(function (x) { return x.it; });
+  }
+  function certBanner(cert) {
+    if (!cert || typeof cert !== 'object') return null;
+    var heads = { expired: 'ใบรับรองหมดอายุแล้ว', expiring: 'ใบรับรองใกล้หมดอายุ', valid: 'ใบรับรองใช้ได้' };
+    var tones = { expired: 'err', expiring: 'warn', valid: 'ok' };
+    if (!heads[cert.status]) return null;
+    var parts = [];
+    if (cert.title) parts.push(String(cert.title));
+    if (cert.certNo) parts.push('เลขที่ ' + cert.certNo);
+    var until = thaiDate(cert.validUntil);
+    if (until) parts.push('ใช้ได้ถึง ' + until);
+    return { tone: tones[cert.status], head: heads[cert.status], detail: parts.join(' · '), note: cert.status === 'expired' ? 'โปรดขอใบใหม่ก่อนแจ้งลูกค้า' : '' };
+  }
+  // One search item -> what the simplified card shows.
+  function cardView(it, baseUrl) {
+    var files = Array.isArray(it && it.files) ? it.files.length : 0;
+    var nav = navStatusView(it && it.navStatus);
+    return {
+      code: String(it && it.code),
+      name: String(it && it.name || ''),
+      details: splitDetails(it && it.details).slice(0, 3),
+      photoUrl: isTrustedFileUrl(it && it.photoUrl, baseUrl) ? it.photoUrl : null,
+      filesText: files ? files + ' ไฟล์' : '',
+      navTag: nav && nav.level === 'info' ? nav.text : '',
+      navBanner: nav && nav.level !== 'info' ? nav : null,
+      cert: certBanner(it && it.cert),
+      cite: citationLine(it && it.citation),
+      duplicate: !!(it && it.duplicateCode)
+    };
+  }
+
+  // ---- reply -> bubble view-model ----
+  // kinds: 'product' | 'it'. For 'it', variant: 'answer' | 'no_article' | 'budget' | 'provider_error' | 'empty'.
+  function replyView(data, baseUrl) {
+    var d = data && typeof data === 'object' ? data : {};
+    var topic = d.topic === 'it' ? 'it' : 'product';
+    var source = d.topicSource === 'chosen' ? 'chosen' : 'auto';
+    var logId = typeof d.logId === 'number' && isFinite(d.logId) ? d.logId : null;
+    var hasAnswer = typeof d.answer === 'string' && d.answer.trim() !== '';
+    if (topic === 'product') {
+      var items = Array.isArray(d.items) ? d.items : [];
+      if (d.notInCatalog || items.length === 0) {
+        return { kind: 'product', topic: topic, source: source, lines: answerLines(NOT_IN_CATALOG_TEXT), cards: [], otherCards: [], logId: null, showFeedback: false, note: '', historyText: NOT_IN_CATALOG_TEXT };
+      }
+      var parts = splitByAnswer(items, hasAnswer ? d.answer : null);
+      var toCard = function (it) { return cardView(it, baseUrl); };
+      return {
+        kind: 'product', topic: topic, source: source,
+        lines: hasAnswer ? answerLines(d.answer) : [],
+        cards: sortByNavStatus(parts.main).map(toCard),
+        otherCards: sortByNavStatus(parts.other).map(toCard),
+        logId: logId, showFeedback: logId !== null,
+        note: hasAnswer ? 'สรุปจากเอกสารด้านล่าง ตรวจสอบกับหน้าเอกสารก่อนแจ้งลูกค้า' : '',
+        historyText: hasAnswer ? d.answer.trim() : 'พบสินค้า ' + items.map(function (x) { return x.code; }).join(', ')
+      };
+    }
+    var openId = typeof d.openQuestionId === 'number' || (typeof d.openQuestionId === 'string' && d.openQuestionId) ? d.openQuestionId : null;
+    var sources = (Array.isArray(d.articles) ? d.articles : [])
+      .filter(function (a) { return a && typeof a.title === 'string' && a.title; })
+      .map(function (a) { return { id: a.id, title: a.title }; });
+    var pictureText = typeof d.pictureText === 'string' && d.pictureText.trim() ? d.pictureText.trim() : '';
+    var base = { kind: 'it', topic: topic, source: source, pictureText: pictureText, cards: [], otherCards: [], note: '' };
+    var variant, text;
+    if (d.answerDropped === 'no_article' || openId !== null) {
+      variant = 'no_article';
+      text = hasAnswer ? d.answer.trim() : NO_ARTICLE_TEXT;
+    } else if (d.answerDropped === 'budget') {
+      variant = 'budget'; text = BUDGET_TEXT;
+    } else if (d.answerDropped === 'provider_error') {
+      variant = 'provider_error'; text = PROVIDER_TEXT;
+    } else if (hasAnswer) {
+      variant = 'answer'; text = d.answer.trim();
+    } else {
+      variant = 'empty'; text = PROVIDER_TEXT;
+    }
+    base.variant = variant;
+    base.lines = answerLines(text);
+    base.sources = variant === 'answer' ? sources : [];
+    base.openQuestionId = variant === 'no_article' ? openId : null;
+    base.logId = logId;
+    base.showFeedback = variant === 'answer' && logId !== null;
+    base.historyText = variant === 'answer' || variant === 'no_article' ? text : '';
+    return base;
+  }
+
+  // ---- Open Questions ----
+  function openStateLabel(status) {
+    if (status === 'answered') return 'ไอทีตอบแล้ว';
+    if (status === 'dismissed') return 'ปิดเรื่อง';
+    return 'รอไอที';
+  }
+  function openStateTone(status) {
+    if (status === 'answered') return 'ok';
+    if (status === 'dismissed') return 'mute';
+    return 'warn';
+  }
+  function openRowView(row) {
+    var r = row && typeof row === 'object' ? row : {};
+    var art = r.status === 'answered' && r.article && typeof r.article === 'object' ? r.article : null;
+    return {
+      id: r.id,
+      question: String(r.question || ''),
+      stateLabel: openStateLabel(r.status),
+      tone: openStateTone(r.status),
+      askedText: thaiDateTime(r.askedAt),
+      articleTitle: art ? String(art.title || '') : '',
+      articleLines: art ? answerLines(art.body) : []
+    };
+  }
+  // END PURE
+
+  var ICONS = {
+    alert: [['path', 'M12 9v4'], ['path', 'M12 17h.01'], ['path', 'M10.3 3.9L1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z']],
+    info: [['circle', '12,12,10'], ['path', 'M12 16v-4'], ['path', 'M12 8h.01']],
+    chat: [['path', 'M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z'], ['path', 'M8 9h8'], ['path', 'M8 13h5']],
+    camera: [['path', 'M14.5 4h-5L7 7H4a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2h-3z'], ['circle', '12,13,3']],
+    image: [['rect', '3,3,18,18,2'], ['circle', '9,9,2'], ['path', 'M21 15l-5-5L5 21']],
+    send: [['path', 'M22 2L11 13'], ['path', 'M22 2l-7 20-4-9-9-4z']],
+    close: [['path', 'M18 6L6 18'], ['path', 'M6 6l12 12']],
+    chevronD: [['path', 'M6 9l6 6 6-6']],
+    thumbUp: [['path', 'M7 10v12'], ['path', 'M15 5.88 14 10h5.83a2 2 0 0 1 1.92 2.56l-2.33 8A2 2 0 0 1 17.5 22H4a2 2 0 0 1-2-2v-8a2 2 0 0 1 2-2h2.76a2 2 0 0 0 1.79-1.11L12 2a3.13 3.13 0 0 1 3 3.88Z']],
+    thumbDown: [['path', 'M17 14V2'], ['path', 'M9 18.12 10 14H4.17a2 2 0 0 1-1.92-2.56l2.33-8A2 2 0 0 1 6.5 2H20a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2h-2.76a2 2 0 0 0-1.79 1.11L12 22a3.13 3.13 0 0 1-3-3.88Z']]
+  };
+  function icon(name) {
+    var svg = document.createElementNS(SVG_NS, 'svg');
+    svg.setAttribute('viewBox', '0 0 24 24');
+    svg.setAttribute('fill', 'none');
+    svg.setAttribute('stroke', 'currentColor');
+    svg.setAttribute('stroke-width', '2');
+    svg.setAttribute('stroke-linecap', 'round');
+    svg.setAttribute('stroke-linejoin', 'round');
+    svg.setAttribute('aria-hidden', 'true');
+    ICONS[name].forEach(function (d) {
+      var el = document.createElementNS(SVG_NS, d[0]);
+      var a = d[1].split(',');
+      if (d[0] === 'circle') {
+        el.setAttribute('cx', a[0]); el.setAttribute('cy', a[1]); el.setAttribute('r', a[2]);
+      } else if (d[0] === 'rect') {
+        el.setAttribute('x', a[0]); el.setAttribute('y', a[1]); el.setAttribute('width', a[2]); el.setAttribute('height', a[3]); el.setAttribute('rx', a[4]);
+      } else {
+        el.setAttribute('d', d[1]);
+      }
+      svg.appendChild(el);
+    });
+    return svg;
+  }
+
+  var $ = function (id) { return document.getElementById(id); };
+  var els = {
+    app: $('app'), notice: $('notice'), msg: $('msg'), who: $('who'), mineBtn: $('mineBtn'), kbLink: $('kbLink'),
+    thread: $('thread'), threadIn: $('threadIn'), composer: $('composer'), thumbs: $('thumbs'), q: $('q'),
+    send: $('sendBtn'), hint: $('hint'), cam: $('camBtn'), gal: $('galBtn'), camInput: $('camInput'), galInput: $('galInput'),
+    panel: $('panel'), panelClose: $('panelClose'), panelRefresh: $('panelRefresh'), panelStatus: $('panelStatus'), panelList: $('panelList')
+  };
+  var HINT_DEFAULT = els.hint.innerHTML;
+
+  var current = null;      // the Staff Session
+  var turns = [];          // the Conversation: lives only in this page
+  var attached = [];       // pictures waiting in the composer: { data, preview }
+  var shrinking = 0;       // pictures still being shrunk
+  var busy = false;
+  var nextTurnId = 1;
+
+  function addText(parent, tag, cls, text) {
+    var el = document.createElement(tag);
+    if (cls) el.className = cls;
+    el.textContent = text;
+    parent.appendChild(el);
+    return el;
+  }
+  function addLines(parent, lines) {
+    lines.forEach(function (line) {
+      if (line === '') addText(parent, 'p', 'gap', '');
+      else addText(parent, 'p', '', line);
+    });
+  }
+  function showMessage(text, isError) {
+    els.notice.hidden = false;
+    els.msg.className = 'panel ' + (isError ? 'error' : 'info');
+    els.msg.textContent = '';
+    var ic = icon(isError ? 'alert' : 'info');
+    ic.setAttribute('class', 'msg-icon');
+    els.msg.appendChild(ic);
+    addText(els.msg, 'div', '', text);
+  }
+  function hideMessage() { els.notice.hidden = true; els.msg.textContent = ''; }
+
+  function loadStored() {
+    try { var raw = sessionStorage.getItem(STORE_KEY); return raw ? JSON.parse(raw) : null; } catch (e) { return null; }
+  }
+  function saveStored(obj) {
+    try { sessionStorage.setItem(STORE_KEY, JSON.stringify(obj)); } catch (e) { /* storage blocked */ }
+  }
+  function clearStored() {
+    try { sessionStorage.removeItem(STORE_KEY); } catch (e) { /* storage blocked */ }
+  }
+
+  async function postJson(path, body, headers, timeoutMs) {
+    var controller = new AbortController();
+    var timer = setTimeout(function () { controller.abort(); }, timeoutMs || TIMEOUT_MS);
+    var h = { 'content-type': 'application/json' };
+    if (headers) { for (var k in headers) h[k] = headers[k]; }
+    try {
+      var resp = await fetch(SUPABASE_URL + path, { method: 'POST', headers: h, body: JSON.stringify(body), cache: 'no-store', signal: controller.signal });
+      var data = null;
+      try { data = await resp.json(); } catch (e) { data = null; }
+      return { status: resp.status, data: data };
+    } catch (e) {
+      return { status: 0, data: null };
+    } finally {
+      clearTimeout(timer);
+    }
+  }
+  function sessionHeaders() { return { 'x-pqa-session': current.session }; }
+
+  // ---------- session ----------
+  function renderWho(sess) {
+    els.who.textContent = '';
+    var staff = sess.staff || {};
+    addText(els.who, 'span', 'avatar', initialOf(staff.n));
+    var t = document.createElement('span');
+    t.className = 'who-text';
+    addText(t, 'span', 'who-name', staff.n || '');
+    addText(t, 'span', 'who-unit', staff.un || '');
+    els.who.appendChild(t);
+  }
+  function enterChat(sess) {
+    current = sess;
+    hideMessage();
+    renderWho(sess);
+    els.mineBtn.hidden = false;
+    els.composer.hidden = false;
+    if (!turns.length) renderIntro();
+    els.q.focus();
+    checkEditor();
+  }
+  function lockChat(text) {
+    current = null;
+    els.composer.hidden = true;
+    els.mineBtn.hidden = true;
+    els.kbLink.hidden = true;
+    closePanel();
+    showMessage(text, true);
+  }
+  async function checkEditor() {
+    var r = await postJson('/functions/v1/kb', buildKbBody('me'), sessionHeaders());
+    if (r.status === 200 && r.data && r.data.isItEditor === true) els.kbLink.hidden = false;
+  }
+  async function startSession() {
+    els.app.hidden = false;
+    var sso = getSsoParam(window.location.search);
+    if (sso !== null) {
+      try { history.replaceState(null, '', cleanUrl(window.location.pathname, window.location.search, window.location.hash)); } catch (e) { /* ignore */ }
+      showMessage('กำลังเข้าสู่ระบบ...', false);
+      var r = await postJson('/functions/v1/session', { link: sso });
+      if (r.status === 200 && r.data && typeof r.data.session === 'string') {
+        var sess = { session: r.data.session, staff: r.data.staff || {}, isAdmin: !!r.data.isAdmin, canManage: !!r.data.canManage, expiresAt: r.data.expiresAt };
+        saveStored(sess);
+        enterChat(sess);
+      } else if (r.status === 401) {
+        lockChat(reasonMessage(r.data && r.data.error));
+      } else {
+        lockChat(reasonMessage('network'));
+      }
+      return;
+    }
+    var stored = loadStored();
+    if (isSessionValid(stored, Date.now()) && stored.staff) {
+      enterChat(stored);
+    } else {
+      clearStored();
+      lockChat('กรุณาเปิดจากเมนู ถามข้อมูลสินค้า ใน Job Tracker');
+    }
+  }
+
+  // ---------- thread ----------
+  function renderIntro() {
+    els.threadIn.textContent = '';
+    var box = document.createElement('div');
+    box.className = 'intro';
+    box.appendChild(icon('chat'));
+    addText(box, 'div', 'intro-title', 'ถามได้ทั้งสินค้าและปัญหา IT');
+    addText(box, 'p', '', 'พิมพ์ชื่อหรือรหัสสินค้า หรือเล่าอาการปัญหา IT ที่สาขา แนบรูปหน้าจอได้ 3 รูป');
+    els.threadIn.appendChild(box);
+  }
+  function scrollToEnd() {
+    requestAnimationFrame(function () { els.thread.scrollTop = els.thread.scrollHeight; });
+  }
+  function scrollToTop(el) {
+    requestAnimationFrame(function () {
+      var top = el.getBoundingClientRect().top - els.thread.getBoundingClientRect().top + els.thread.scrollTop - 8;
+      els.thread.scrollTop = Math.max(0, top);
+    });
+  }
+
+  function renderFeedback(logId, topic) {
+    var lb = feedbackLabels(topic);
+    var row = document.createElement('div');
+    row.className = 'fb';
+    addText(row, 'span', '', lb.ask);
+    var up = addText(row, 'button', 'fb-btn', '');
+    var down = addText(row, 'button', 'fb-btn', '');
+    up.type = 'button'; down.type = 'button';
+    up.appendChild(icon('thumbUp')); addText(up, 'span', '', lb.up);
+    down.appendChild(icon('thumbDown')); addText(down, 'span', '', lb.down);
+    var note = addText(row, 'span', '', '');
+    var chosen = 0;
+    function paint() {
+      up.className = 'fb-btn' + (chosen === 1 ? ' sel' : '');
+      down.className = 'fb-btn' + (chosen === -1 ? ' sel' : '');
+    }
+    async function send(value) {
+      if (!current || up.disabled) return;
+      up.disabled = true; down.disabled = true;
+      note.className = ''; note.textContent = '';
+      var r = await postJson('/functions/v1/feedback', feedbackBody(logId, value), sessionHeaders());
+      up.disabled = false; down.disabled = false;
+      if (r.status === 200 && r.data && r.data.ok) {
+        chosen = value; paint();
+        note.className = 'fb-thanks'; note.textContent = 'ขอบคุณสำหรับความเห็น';
+      } else {
+        note.className = 'fb-err'; note.textContent = 'ส่งความเห็นไม่สำเร็จ';
+      }
+    }
+    up.addEventListener('click', function () { send(1); });
+    down.addEventListener('click', function () { send(-1); });
+    return row;
+  }
+
+  function makeCard(c) {
+    var card = document.createElement('div');
+    card.className = 'card';
+    var head = document.createElement('div');
+    head.className = 'card-head';
+    addText(head, 'span', 'code', c.code);
+    if (c.navTag) addText(head, 'span', 'navtag', c.navTag);
+    if (c.filesText) addText(head, 'span', 'filecount', c.filesText);
+    card.appendChild(head);
+    var body = document.createElement('div');
+    body.className = 'card-body';
+    if (c.photoUrl) {
+      var img = document.createElement('img');
+      img.className = 'card-photo';
+      img.alt = 'รูปสินค้า ' + c.code;
+      img.onerror = function () { img.hidden = true; };
+      img.src = c.photoUrl;
+      body.appendChild(img);
+    }
+    var info = document.createElement('div');
+    info.className = 'card-info';
+    addText(info, 'div', 'name', c.name);
+    if (c.details.length) {
+      var ul = addText(info, 'ul', 'details', '');
+      c.details.forEach(function (d) { addText(ul, 'li', '', d); });
+    }
+    if (c.cite) addText(info, 'div', 'cite-line', c.cite);
+    body.appendChild(info);
+    card.appendChild(body);
+    if (c.duplicate) {
+      var dup = addText(card, 'div', 'cert warn', '');
+      addText(dup, 'span', 'cert-dot', '');
+      addText(dup, 'div', '', 'รหัสนี้พบมากกว่า 1 รายการในเอกสาร โปรดตรวจสอบ');
+    }
+    if (c.navBanner) {
+      var nb = addText(card, 'div', 'cert ' + c.navBanner.tone, '');
+      addText(nb, 'span', 'cert-dot', '');
+      var nt = document.createElement('div');
+      addText(nt, 'b', '', c.navBanner.text);
+      nb.appendChild(nt);
+    }
+    if (c.cert) {
+      var cb = addText(card, 'div', 'cert ' + c.cert.tone, '');
+      addText(cb, 'span', 'cert-dot', '');
+      var ct = document.createElement('div');
+      addText(ct, 'b', '', c.cert.head);
+      if (c.cert.detail) addText(ct, 'div', '', c.cert.detail);
+      if (c.cert.note) addText(ct, 'div', '', c.cert.note);
+      cb.appendChild(ct);
+    }
+    return card;
+  }
+
+  var openMenu = null;
+  function closeMenu() {
+    if (openMenu) {
+      openMenu.menu.remove();
+      openMenu.btn.setAttribute('aria-expanded', 'false');
+      openMenu = null;
+    }
+  }
+  function makeTopicLabel(turn, view) {
+    var wrap = document.createElement('div');
+    wrap.className = 'topic-wrap';
+    var btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = 'topic-btn';
+    btn.setAttribute('aria-haspopup', 'menu');
+    btn.setAttribute('aria-expanded', 'false');
+    btn.disabled = busy;
+    btn.dataset.topicBtn = '1';
+    addText(btn, 'span', '', topicLabelText(view.topic, view.source));
+    btn.appendChild(icon('chevronD'));
+    wrap.appendChild(btn);
+    btn.addEventListener('click', function (ev) {
+      ev.stopPropagation();
+      if (openMenu && openMenu.btn === btn) { closeMenu(); return; }
+      closeMenu();
+      var menu = document.createElement('div');
+      menu.className = 'topic-menu';
+      menu.setAttribute('role', 'menu');
+      addText(menu, 'div', 'menu-hint', 'ถามคำถามเดิมอีกครั้งด้วยหัวข้อ');
+      topicMenuItems(turn.topic).forEach(function (it) {
+        var b = addText(menu, 'button', '', it.label);
+        b.type = 'button';
+        b.setAttribute('role', 'menuitemradio');
+        b.setAttribute('aria-checked', it.checked ? 'true' : 'false');
+        b.addEventListener('click', function () {
+          closeMenu();
+          if (it.value === turn.topic && it.value !== 'auto') return;
+          turn.topic = it.value;
+          ask(turn);
+        });
+      });
+      wrap.appendChild(menu);
+      btn.setAttribute('aria-expanded', 'true');
+      openMenu = { menu: menu, btn: btn };
+      var first = menu.querySelector('button');
+      if (first) first.focus();
+    });
+    return wrap;
+  }
+
+  // Fill the system side of one turn from its state.
+  function renderReply(turn) {
+    var box = turn.sysEl;
+    box.textContent = '';
+    if (turn.state === 'wait') {
+      var w = addText(box, 'div', 'bubble b-sys wait', 'กำลังหา...');
+      w.setAttribute('aria-busy', 'true');
+      return;
+    }
+    if (turn.state === 'error') {
+      var eb = addText(box, 'div', 'bubble b-sys error', '');
+      addText(eb, 'p', '', turn.error);
+      if (current) {
+        var row = addText(eb, 'div', 'btn-row', '');
+        var retry = addText(row, 'button', 'btn alt small', 'ลองอีกครั้ง');
+        retry.type = 'button';
+        retry.disabled = busy;
+        retry.addEventListener('click', function () { ask(turn); });
+      }
+      return;
+    }
+    var v = turn.view;
+    var bub = document.createElement('div');
+    bub.className = 'bubble b-sys';
+    bub.appendChild(makeTopicLabel(turn, v));
+    if (v.lines.length) addLines(bub, v.lines);
+    if (v.note) addText(bub, 'div', 'answer-note', v.note);
+    if (v.kind === 'it' && v.sources && v.sources.length) {
+      var src = addText(bub, 'div', 'src', '');
+      addText(src, 'b', '', 'แหล่งข้อมูล');
+      var ul = addText(src, 'ul', '', '');
+      v.sources.forEach(function (s) { addText(ul, 'li', '', s.title); });
+    }
+    if (v.kind === 'it' && v.openQuestionId !== null) {
+      var nb = addText(bub, 'div', 'note-box', '');
+      addText(nb, 'span', '', 'ส่งให้ทีมไอทีแล้ว');
+      var lk = addText(nb, 'button', 'link-btn', 'ดูในคำถามของฉัน');
+      lk.type = 'button';
+      lk.addEventListener('click', function () { openPanel(lk); });
+    }
+    box.appendChild(bub);
+    if (v.showFeedback) box.appendChild(renderFeedback(v.logId, v.topic));
+    if (v.kind === 'product' && (v.cards.length || v.otherCards.length)) {
+      var cards = document.createElement('div');
+      cards.className = 'cards';
+      v.cards.forEach(function (c) { cards.appendChild(makeCard(c)); });
+      if (v.otherCards.length) {
+        var more = document.createElement('details');
+        more.className = 'more';
+        addText(more, 'summary', '', 'รายการใกล้เคียงอื่น (' + v.otherCards.length + ')');
+        v.otherCards.forEach(function (c) { more.appendChild(makeCard(c)); });
+        cards.appendChild(more);
+      }
+      box.appendChild(cards);
+      var fl = addText(box, 'div', 'foot-link', 'ดูหน้าเอกสารและไฟล์ทั้งหมดได้ที่ ');
+      var a = addText(fl, 'a', '', 'หน้าค้นหาสินค้า');
+      a.href = 'app.html';
+    }
+  }
+
+  function renderUser(turn) {
+    var box = turn.userEl;
+    box.textContent = '';
+    if (turn.images && turn.images.length) {
+      var pics = addText(box, 'div', 'user-pics', '');
+      turn.images.forEach(function (im) {
+        var img = document.createElement('img');
+        img.src = im.preview;
+        img.alt = 'รูปที่แนบ';
+        pics.appendChild(img);
+      });
+    }
+    var b = addText(box, 'div', 'bubble b-user', '');
+    addLines(b, answerLines(turn.q));
+    var pt = (turn.view && turn.view.pictureText) || turn.pictureText;
+    if (pt) {
+      var pbox = addText(box, 'div', 'pic-text', '');
+      renderPictureText(turn, pbox, pt, false);
+    }
+  }
+  function renderPictureText(turn, pbox, text, editing) {
+    pbox.textContent = '';
+    addText(pbox, 'b', '', PICTURE_TEXT_LABEL);
+    if (!editing) {
+      addText(pbox, 'div', 'pic-body', text);
+      var row = addText(pbox, 'div', 'btn-row', '');
+      var edit = addText(row, 'button', 'btn alt small', 'แก้ข้อความแล้วถามใหม่');
+      edit.type = 'button';
+      edit.disabled = busy;
+      edit.dataset.editPicture = '1';
+      edit.addEventListener('click', function () { renderPictureText(turn, pbox, text, true); });
+      return;
+    }
+    var ta = document.createElement('textarea');
+    ta.value = text;
+    ta.maxLength = MAX_PICTURE_TEXT;
+    ta.setAttribute('aria-label', 'ข้อความที่อ่านจากรูป แก้ไขได้');
+    pbox.appendChild(ta);
+    var r2 = addText(pbox, 'div', 'btn-row', '');
+    var go = addText(r2, 'button', 'btn small', 'ถามใหม่');
+    var cancel = addText(r2, 'button', 'btn alt small', 'ยกเลิก');
+    go.type = 'button'; cancel.type = 'button';
+    go.disabled = busy;
+    go.addEventListener('click', function () {
+      var edited = ta.value.trim();
+      if (!edited) return;
+      turn.pictureText = edited;
+      turn.images = [];
+      ask(turn);
+    });
+    cancel.addEventListener('click', function () { renderPictureText(turn, pbox, text, false); });
+    ta.focus();
+  }
+
+  function addTurn(turn) {
+    if (!turns.length) els.threadIn.textContent = '';
+    turn.el = document.createElement('div');
+    turn.el.className = 'turn';
+    turn.userEl = addText(turn.el, 'div', 'row-user', '');
+    turn.sysEl = addText(turn.el, 'div', 'row-sys', '');
+    turns.push(turn);
+    els.threadIn.appendChild(turn.el);
+    renderUser(turn);
+  }
+
+  function setBusy(on) {
+    busy = on;
+    updateSend();
+    els.thread.querySelectorAll('[data-topic-btn],[data-edit-picture]').forEach(function (b) { b.disabled = on; });
+  }
+
+  // Send (or re-send) the question of one turn. History is every answered turn before it.
+  async function ask(turn) {
+    if (busy || !current) return;
+    if (!isSessionValid(current, Date.now())) {
+      clearStored();
+      lockChat(reasonMessage('expired'));
+      return;
+    }
+    closeMenu();
+    var idx = turns.indexOf(turn);
+    var body = buildAskBody(turn, historyFromTurns(turns, idx));
+    turn.state = 'wait';
+    setBusy(true);
+    renderReply(turn);
+    scrollToEnd();
+    var r = await postJson('/functions/v1/ask', body, sessionHeaders(), ASK_TIMEOUT_MS);
+    if (r.status === 200 && r.data && (r.data.topic === 'product' || r.data.topic === 'it')) {
+      turn.view = replyView(r.data, SUPABASE_URL);
+      turn.reply = turn.view.historyText ? { text: turn.view.historyText, topic: turn.view.topic } : null;
+      turn.state = 'done';
+      turn.error = '';
+      renderUser(turn);
+      renderReply(turn);
+      setBusy(false);
+      scrollToTop(turn.el);
+      return;
+    }
+    turn.reply = null;
+    if (r.status === 401) {
+      clearStored();
+      turn.state = 'error';
+      turn.error = errorText(401, r.data);
+      renderReply(turn);
+      setBusy(false);
+      lockChat(turn.error);
+      return;
+    }
+    turn.state = 'error';
+    turn.error = errorText(r.status, r.data);
+    renderReply(turn);
+    setBusy(false);
+    scrollToEnd();
+  }
+
+  // ---------- composer ----------
+  function updateSend() {
+    els.send.disabled = !canSend(els.q.value, attached.length, busy) || shrinking > 0;
+  }
+  function setHint(text, warn) {
+    if (text) { els.hint.textContent = text; els.hint.className = warn ? 'warn' : ''; }
+    else { els.hint.innerHTML = HINT_DEFAULT; els.hint.className = ''; }
+  }
+  function growBox() {
+    els.q.style.height = 'auto';
+    els.q.style.height = Math.min(els.q.scrollHeight + 2, 132) + 'px';
+  }
+  function renderThumbs() {
+    els.thumbs.textContent = '';
+    attached.forEach(function (im, i) {
+      var box = addText(els.thumbs, 'div', 'thumb-box', '');
+      var img = document.createElement('img');
+      img.src = im.preview;
+      img.alt = 'รูปที่แนบ ' + (i + 1);
+      box.appendChild(img);
+      var x = addText(box, 'button', 'thumb-x', '');
+      x.type = 'button';
+      x.setAttribute('aria-label', 'เอารูปที่ ' + (i + 1) + ' ออก');
+      x.appendChild(icon('close'));
+      x.addEventListener('click', function () { attached.splice(i, 1); renderThumbs(); updateSend(); els.q.focus(); });
+    });
+    for (var k = 0; k < shrinking; k++) addText(els.thumbs, 'div', 'thumb-busy', 'กำลังย่อ...');
+    var full = attached.length + shrinking >= MAX_IMAGES;
+    els.cam.disabled = full;
+    els.gal.disabled = full;
+  }
+
+  async function loadSource(file) {
+    if (window.createImageBitmap) {
+      try { return await createImageBitmap(file); } catch (e) { /* fall back to Image */ }
+    }
+    return await new Promise(function (resolve, reject) {
+      var url = URL.createObjectURL(file);
+      var im = new Image();
+      im.onload = function () { URL.revokeObjectURL(url); resolve(im); };
+      im.onerror = function () { URL.revokeObjectURL(url); reject(new Error('decode')); };
+      im.src = url;
+    });
+  }
+  // Longest side 1280, JPEG 0.8; steps down only if the result is still over the server limit.
+  async function shrinkImage(file) {
+    var src = await loadSource(file);
+    var w = src.width || src.naturalWidth;
+    var h = src.height || src.naturalHeight;
+    var cap = MAX_SIDE;
+    for (var round = 0; round < 4; round++) {
+      var sz = shrinkSize(w, h, cap);
+      var cv = document.createElement('canvas');
+      cv.width = sz.w; cv.height = sz.h;
+      var ctx = cv.getContext('2d');
+      ctx.fillStyle = 'white'; // ds-allow-hardcode: JPEG has no alpha; transparent PNG pixels become white
+      ctx.fillRect(0, 0, sz.w, sz.h);
+      ctx.drawImage(src, 0, 0, sz.w, sz.h);
+      var qualities = [JPEG_QUALITY, 0.65, 0.5];
+      for (var qi = 0; qi < qualities.length; qi++) {
+        var url = cv.toDataURL('image/jpeg', qualities[qi]);
+        var b64 = dataUrlToBase64(url);
+        if (b64 && decodedBytes(b64) <= MAX_IMAGE_BYTES) {
+          if (src.close) src.close();
+          return { data: b64, preview: url };
+        }
+      }
+      cap = Math.round(cap * 0.75);
+    }
+    throw new Error('too_big');
+  }
+  async function addFiles(files) {
+    var list = Array.prototype.slice.call(files || []).filter(function (f) { return f && /^image[/]/.test(f.type); });
+    if (!list.length) return;
+    var room = roomForImages(attached.length + shrinking, list.length);
+    if (room < list.length) setHint('แนบได้สูงสุด ' + MAX_IMAGES + ' รูป', true);
+    else setHint('', false);
+    list = list.slice(0, room);
+    var failed = 0;
+    shrinking += list.length;
+    renderThumbs(); updateSend();
+    for (var i = 0; i < list.length; i++) {
+      try { attached.push(await shrinkImage(list[i])); } catch (e) { failed++; }
+      shrinking--;
+      renderThumbs(); updateSend();
+    }
+    if (failed) setHint('อ่านรูปไม่ได้ ' + failed + ' รูป ลองรูปอื่น', true);
+  }
+
+  function submit() {
+    if (!current || busy || shrinking > 0) return;
+    var text = els.q.value.trim();
+    if (!canSend(text, attached.length, busy)) return;
+    var turn = { id: nextTurnId++, q: text, topic: 'auto', images: attached.slice(), pictureText: '', state: 'wait', view: null, reply: null, error: '' };
+    attached = [];
+    els.q.value = '';
+    growBox();
+    renderThumbs();
+    setHint('', false);
+    addTurn(turn);
+    ask(turn);
+  }
+
+  els.composer.addEventListener('submit', function (ev) { ev.preventDefault(); submit(); });
+  els.q.addEventListener('keydown', function (ev) {
+    if (ev.key === 'Enter' && !ev.shiftKey && !ev.isComposing && ev.keyCode !== 229) {
+      ev.preventDefault();
+      submit();
+    }
+  });
+  els.q.addEventListener('input', function () { growBox(); updateSend(); });
+  els.q.addEventListener('paste', function (ev) {
+    var items = ev.clipboardData && ev.clipboardData.items ? ev.clipboardData.items : [];
+    var files = [];
+    for (var i = 0; i < items.length; i++) {
+      if (items[i].kind === 'file' && /^image[/]/.test(items[i].type)) {
+        var f = items[i].getAsFile();
+        if (f) files.push(f);
+      }
+    }
+    if (files.length) { ev.preventDefault(); addFiles(files); }
+  });
+  els.cam.appendChild(icon('camera'));
+  els.gal.appendChild(icon('image'));
+  els.send.insertBefore(icon('send'), els.send.firstChild);
+  els.cam.addEventListener('click', function () { els.camInput.click(); });
+  els.gal.addEventListener('click', function () { els.galInput.click(); });
+  [els.camInput, els.galInput].forEach(function (inp) {
+    inp.addEventListener('change', function () { addFiles(inp.files); inp.value = ''; });
+  });
+  document.addEventListener('click', function (ev) {
+    if (openMenu && !openMenu.menu.contains(ev.target)) closeMenu();
+  });
+  document.addEventListener('keydown', function (ev) {
+    if (ev.key !== 'Escape') return;
+    if (openMenu) { var b = openMenu.btn; closeMenu(); b.focus(); return; }
+    if (!els.panel.hidden) closePanel();
+  });
+
+  // ---------- my questions ----------
+  var panelOpener = null;
+  async function loadMine() {
+    els.panelStatus.textContent = 'กำลังโหลด...';
+    els.panelList.textContent = '';
+    els.panelRefresh.disabled = true;
+    var r = current ? await postJson('/functions/v1/kb', buildKbBody('open.mine', { limit: 30 }), sessionHeaders()) : { status: 401, data: null };
+    els.panelRefresh.disabled = false;
+    if (r.status === 401) { els.panelStatus.textContent = errorText(401); return; }
+    if (r.status !== 200 || !r.data || !Array.isArray(r.data.rows)) { els.panelStatus.textContent = 'โหลดรายการไม่สำเร็จ ลองรีเฟรชอีกครั้ง'; return; }
+    els.panelStatus.textContent = r.data.rows.length ? '' : 'ยังไม่มีคำถามที่ส่งถึงทีมไอที';
+    r.data.rows.forEach(function (row) {
+      var v = openRowView(row);
+      var card = addText(els.panelList, 'div', 'oq', '');
+      addText(card, 'p', 'oq-q', v.question);
+      var meta = addText(card, 'div', 'oq-meta', '');
+      addText(meta, 'span', 'state ' + v.tone, v.stateLabel);
+      if (v.askedText) addText(meta, 'span', '', v.askedText);
+      if (v.articleTitle || v.articleLines.length) {
+        var art = addText(card, 'div', 'oq-art', '');
+        if (v.articleTitle) addText(art, 'b', '', v.articleTitle);
+        addLines(art, v.articleLines);
+      }
+    });
+  }
+  function openPanel(opener) {
+    panelOpener = opener || els.mineBtn;
+    els.panel.hidden = false;
+    els.panelClose.focus();
+    loadMine();
+  }
+  function closePanel() {
+    if (els.panel.hidden) return;
+    els.panel.hidden = true;
+    if (panelOpener && document.contains(panelOpener)) panelOpener.focus();
+  }
+  els.mineBtn.addEventListener('click', function () { if (els.panel.hidden) openPanel(els.mineBtn); else closePanel(); });
+  els.panelClose.addEventListener('click', closePanel);
+  els.panelRefresh.addEventListener('click', loadMine);
+
+  updateSend();
+  startSession();
+})();
+</script>
+</body>
+</html>

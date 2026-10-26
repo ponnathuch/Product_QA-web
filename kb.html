@@ -1,0 +1,1327 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>จัดการความรู้ IT</title>
+<link rel="stylesheet" href="pqa-theme.css?v=1">
+<style>
+  /* Page layout only. Colours, fonts, radii, spacing and focus come from pqa-theme.css tokens. */
+  .top-inner { max-width: var(--max-wide); flex-wrap: wrap; }
+  #who { font-size: var(--fs-s); max-width: 40%; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  #who:empty { display: none; }
+
+  main { max-width: var(--max-wide); margin: calc(var(--space-6) * -1 - var(--space-3)) auto 0; padding: 0 var(--space-4) calc(var(--space-6) + var(--space-2)); }
+  .panel { margin-bottom: var(--space-3); }
+  .panel h2 { font-size: var(--fs-l); margin: 0 0 var(--space-3); color: var(--c-brand-strong); }
+  .panel h3 { font-size: var(--fs-m); margin: var(--space-4) 0 var(--space-2); color: var(--c-ink-2); }
+  #msg { display: flex; gap: var(--space-3); align-items: flex-start; }
+  #msg.error { color: var(--c-err); font-weight: bold; }
+  #msg.info { color: var(--c-ink-2); }
+  #denied a { color: var(--c-brand-strong); font-weight: bold; }
+
+  .note { font-size: var(--fs-s); color: var(--c-ink-3); margin: var(--space-2) 0 0; }
+  .note.err { color: var(--c-err); font-weight: bold; }
+  .note.ok { color: var(--c-ok); }
+  .note.warn { color: var(--c-warn); }
+  label.lbl { display: block; font-size: var(--fs-s); color: var(--c-ink-2); margin: var(--space-3) 0 var(--space-1); font-weight: bold; }
+  .row { display: flex; flex-wrap: wrap; gap: var(--space-3); align-items: flex-end; }
+  .row > .grow { flex: 1; min-width: var(--size-field); }
+  .input { width: 100%; }
+  textarea.input { display: block; resize: vertical; line-height: 1.5; }
+  .input.bad { border-color: var(--c-err); background: var(--c-err-soft); }
+  .actions { display: flex; flex-wrap: wrap; gap: var(--space-2); margin-top: var(--space-3); align-items: center; }
+  .btn.small { font-size: var(--fs-s); padding: var(--space-1) var(--space-3); }
+  .btn.danger { background: var(--c-surface); color: var(--c-err); border-color: var(--c-err-line); }
+  .btn.danger:hover { background: var(--c-err-soft); border-color: var(--c-err); }
+  .btn .ic { width: var(--size-icon-s); height: var(--size-icon-s); margin-right: var(--space-1); flex: 0 0 auto; }
+
+  .tag {
+    font-size: var(--fs-xs); font-weight: bold; border-radius: var(--radius-pill); padding: var(--space-0) var(--space-2);
+    color: var(--c-brand-strong); background: var(--c-brand-soft); white-space: nowrap;
+  }
+  .tag.ok { color: var(--c-ok); background: var(--c-ok-soft); }
+  .tag.warn { color: var(--c-warn); background: var(--c-warn-soft); }
+  .tag.err { color: var(--c-err); background: var(--c-err-soft); }
+  .tags { display: flex; flex-wrap: wrap; gap: var(--space-1); }
+  .empty { color: var(--c-ink-3); font-size: var(--fs-s); }
+
+  .counter { font-size: var(--fs-xs); color: var(--c-ink-3); margin-top: var(--space-1); text-align: right; }
+  .counter.warn { color: var(--c-warn); }
+  .counter.err { color: var(--c-err); font-weight: bold; }
+
+  /* ---------- tabs and lists ---------- */
+  .tabs { display: flex; flex-wrap: wrap; gap: var(--space-2); margin-bottom: var(--space-3); }
+  .tab { border: 1px solid var(--c-line-strong); border-radius: var(--radius-pill); background: var(--c-surface); color: var(--c-ink-2); min-height: var(--size-target); padding: var(--space-1) var(--space-4); font-size: var(--fs-s); cursor: pointer; }
+  .tab:hover { background: var(--c-brand-soft); }
+  .tab[aria-selected="true"] { background: var(--c-brand-soft); border-color: var(--c-brand); color: var(--c-brand-strong); font-weight: bold; }
+  .tab .badge { margin-left: var(--space-2); }
+  .list { list-style: none; margin: 0; padding: 0; }
+  .list > li { padding: var(--space-2) 0; border-bottom: 1px solid var(--c-line); font-size: var(--fs-s); }
+  .list > li:last-child { border-bottom: 0; }
+  .list .when { color: var(--c-ink-3); font-size: var(--fs-xs); }
+  .list .who { font-weight: bold; }
+  .list .sum { color: var(--c-ink-2); word-break: break-word; }
+  .item-row { display: flex; flex-wrap: wrap; gap: var(--space-2); align-items: center; }
+  .item-main {
+    flex: 1; min-width: var(--size-field); display: block; text-align: left; border: 0; background: transparent; color: var(--c-ink);
+    padding: var(--space-2) var(--space-1); font-size: var(--fs-s); cursor: pointer; border-radius: var(--radius-s); min-height: var(--size-target);
+  }
+  .item-main:hover { background: var(--c-brand-soft); }
+  .item-title { display: block; font-weight: bold; word-break: break-word; }
+  .item-meta { display: flex; flex-wrap: wrap; gap: var(--space-1) var(--space-3); align-items: center; color: var(--c-ink-3); font-size: var(--fs-xs); margin-top: var(--space-1); }
+  .pager { display: flex; flex-wrap: wrap; gap: var(--space-2); align-items: center; margin-top: var(--space-3); }
+
+  /* ---------- editor ---------- */
+  .quote { margin: 0 0 var(--space-3); padding: var(--space-3); border-left: 4px solid var(--c-brand-line); background: var(--c-surface-2); border-radius: var(--radius-s); font-size: var(--fs-s); word-break: break-word; white-space: pre-wrap; }
+  .quote .when { display: block; color: var(--c-ink-3); font-size: var(--fs-xs); margin-bottom: var(--space-1); white-space: normal; }
+  .warnbox { margin-top: var(--space-3); padding: var(--space-3); border: 1px solid var(--c-err-line); border-radius: var(--radius-m); background: var(--c-err-soft); color: var(--c-err); font-weight: bold; font-size: var(--fs-s); display: flex; gap: var(--space-2); align-items: flex-start; }
+  .warnbox svg { flex: 0 0 var(--size-icon); width: var(--size-icon); height: var(--size-icon); }
+
+  /* ---------- confirm dialogs ---------- */
+  #scrim { display: none; position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: var(--c-scrim); z-index: 10; overflow: auto; padding: var(--space-4); }
+  #scrim.open { display: block; }
+  .modal {
+    max-width: var(--max-narrow); margin: var(--space-5) auto; background: var(--c-surface); color: var(--c-ink);
+    border: 1px solid var(--c-line-strong); border-radius: var(--radius-l); padding: var(--space-4);
+  }
+  .modal h2 { font-size: var(--fs-l); margin: 0 0 var(--space-3); color: var(--c-brand-strong); }
+  .modal p { margin: 0 0 var(--space-2); word-break: break-word; }
+  .modal-err { color: var(--c-err); font-weight: bold; font-size: var(--fs-s); margin-top: var(--space-3); }
+  .modal-actions { display: flex; flex-wrap: wrap; gap: var(--space-2); justify-content: flex-end; margin-top: var(--space-4); }
+  #scrim :focus-visible { outline-color: var(--c-brand); }
+
+  #oldBrowser { max-width: var(--max-narrow); margin: var(--space-6) auto; padding: 0 var(--space-4); }
+
+  @media (max-width: 520px) {
+    .top { padding: var(--space-3) var(--space-3) calc(var(--space-6) * 2 - var(--space-3)); }
+    .title p { display: none; }
+    #who { max-width: 100%; order: 3; flex: 1 1 100%; }
+    main { padding: 0 var(--space-3) var(--space-6); }
+    .btn { min-height: var(--size-target-lg); }
+    .tab { flex: 1 1 auto; }
+  }
+</style>
+</head>
+<body>
+<div id="oldBrowser" hidden>
+  <div class="panel" role="alert"><p id="oldBrowserText"></p></div>
+</div>
+
+<header class="top" id="topBar">
+  <div class="top-inner">
+    <div class="logo" aria-hidden="true">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/><path d="M9 7h7"/><path d="M9 11h5"/></svg>
+    </div>
+    <div class="title">
+      <h1>จัดการความรู้ IT</h1>
+      <p>เขียนและแก้บทความแก้ปัญหา และตอบคำถามที่ระบบยังตอบไม่ได้ มีผลกับสาขาทันที</p>
+    </div>
+    <div id="who"></div>
+    <a id="backLink" class="top-link" href="chat.html">กลับไปหน้าถามคำถาม</a>
+  </div>
+</header>
+
+<main id="mainBox">
+  <div id="msg" class="panel" role="status" hidden></div>
+
+  <div id="denied" class="panel" hidden>
+    <p id="deniedText"></p>
+    <p><a id="deniedLink" href="chat.html">กลับไปหน้าถามคำถาม</a></p>
+  </div>
+
+  <div id="app" hidden>
+    <div id="tabs" class="tabs" role="tablist" aria-label="หมวดจัดการความรู้ IT"></div>
+
+    <!-- Tab 1: Open Questions -->
+    <section id="panel-open" class="panel" role="tabpanel" aria-labelledby="tab-open" hidden>
+      <h2 id="hOpen">คำถามรอ IT ตอบ</h2>
+      <div class="row">
+        <div class="grow">
+          <label class="lbl" for="openFilter">แสดงคำถามที่</label>
+          <!-- ds-allow-native-select: native select keeps keyboard and screen-reader behaviour on old Edge 109 -->
+          <select id="openFilter" class="input"></select>
+        </div>
+      </div>
+      <ul id="openList" class="list"></ul>
+      <p id="openNote" class="note" role="status" aria-live="polite"></p>
+      <div class="pager">
+        <button type="button" id="openPrev" class="btn alt small" disabled>ก่อนหน้า</button>
+        <span id="openPage" class="note"></span>
+        <button type="button" id="openNext" class="btn alt small" disabled>ถัดไป</button>
+      </div>
+    </section>
+
+    <!-- Tab 2: Articles -->
+    <section id="panel-articles" class="panel" role="tabpanel" aria-labelledby="tab-articles" hidden>
+      <h2 id="hArticles">บทความ</h2>
+      <div class="row">
+        <div class="grow">
+          <label class="lbl" for="articleSearch">ค้นหาบทความ</label>
+          <input type="search" id="articleSearch" class="input" maxlength="100" autocomplete="off" placeholder="เช่น เครื่องพิมพ์ใบเสร็จ หรือ POS เปิดไม่ติด">
+        </div>
+        <button type="button" id="articleSearchBtn" class="btn alt">ค้นหา</button>
+        <button type="button" id="articleNew" class="btn">เขียนบทความใหม่</button>
+      </div>
+      <ul id="articleList" class="list"></ul>
+      <p id="articleNote" class="note" role="status" aria-live="polite"></p>
+      <div class="pager">
+        <button type="button" id="articlePrev" class="btn alt small" disabled>ก่อนหน้า</button>
+        <span id="articlePage" class="note"></span>
+        <button type="button" id="articleNext" class="btn alt small" disabled>ถัดไป</button>
+      </div>
+
+      <h3 id="hLog">ประวัติการแก้ไข</h3>
+      <ul id="logList" class="list"></ul>
+      <div class="actions"><button type="button" id="logMore" class="btn alt small" hidden>ดูรายการก่อนหน้า</button></div>
+      <p id="logNote" class="note" role="status" aria-live="polite"></p>
+    </section>
+
+    <!-- Tab 3: Editors -->
+    <section id="panel-editors" class="panel" role="tabpanel" aria-labelledby="tab-editors" hidden>
+      <h2 id="hEditors">ผู้ดูแล</h2>
+      <p class="note" id="editorsHelp"></p>
+      <ul id="editorList" class="list"></ul>
+      <p id="editorListNote" class="note" role="status" aria-live="polite"></p>
+      <div id="editorAddBox" hidden>
+        <h3>เพิ่มผู้ดูแล</h3>
+        <div class="row">
+          <div class="grow">
+            <label class="lbl" for="editorU">ชื่อผู้ใช้ Job Tracker</label>
+            <input type="text" id="editorU" class="input" maxlength="64" autocomplete="off">
+          </div>
+          <div class="grow">
+            <label class="lbl" for="editorN">ชื่อที่แสดง (ไม่บังคับ)</label>
+            <input type="text" id="editorN" class="input" maxlength="100" autocomplete="off">
+          </div>
+          <button type="button" id="editorAdd" class="btn">เพิ่มผู้ดูแล</button>
+        </div>
+        <p id="editorAddNote" class="note" role="status" aria-live="polite"></p>
+      </div>
+    </section>
+
+    <!-- Article editor: replaces the list of the tab it was opened from -->
+    <section id="editorPanel" class="panel" aria-labelledby="hEditor" hidden>
+      <h2 id="hEditor">บทความ</h2>
+      <blockquote id="quote" class="quote" hidden></blockquote>
+      <label class="lbl" for="fTitle">หัวข้อ</label>
+      <input type="text" id="fTitle" class="input" autocomplete="off" aria-describedby="titleCounter">
+      <div id="titleCounter" class="counter" aria-live="off"></div>
+      <label class="lbl" for="fBody">เนื้อหา (ขั้นตอนแก้ปัญหา ข้อละบรรทัด)</label>
+      <textarea id="fBody" class="input" rows="12" aria-describedby="bodyCounter"></textarea>
+      <div id="bodyCounter" class="counter" aria-live="off"></div>
+      <label class="lbl" for="fTags">แท็ก (คั่นด้วยจุลภาค เช่น POS, เครื่องพิมพ์)</label>
+      <input type="text" id="fTags" class="input" autocomplete="off" aria-describedby="tagsCounter">
+      <div id="tagsCounter" class="counter" aria-live="off"></div>
+      <div id="secretBox" class="warnbox" role="alert" hidden></div>
+      <div class="actions">
+        <button type="button" id="fSave" class="btn">บันทึกบทความ</button>
+        <button type="button" id="fCancel" class="btn alt">กลับไปรายการ</button>
+        <button type="button" id="fDismiss" class="btn danger" hidden>ปิดเรื่อง</button>
+        <button type="button" id="fDelete" class="btn danger" hidden>ลบบทความ</button>
+      </div>
+      <p id="fNote" class="note" role="status" aria-live="polite"></p>
+    </section>
+  </div>
+</main>
+
+<div id="scrim"></div>
+
+<script>
+(function () {
+  var SUPABASE_URL = 'https://zuyqwkjvjuwykrdhzhwq.supabase.co';
+  var TIMEOUT_MS = 30000;
+  var STORE_KEY = 'pqa.session';
+  var SVG_NS = 'http://www.w3.org/2000/svg';
+
+  // BEGIN PURE
+  var TITLE_MAX = 200;
+  var BODY_MAX = 6000;
+  var TAGS_MAX = 10;
+  var TAG_MAX = 40;
+  var USER_MAX = 64;
+  var NAME_MAX = 100;
+  var LIST_PAGE = 20;
+  var LOG_PAGE = 20;
+  var TAB_DEFS = [
+    { id: 'open', label: 'คำถามรอ IT ตอบ' },
+    { id: 'articles', label: 'บทความ' },
+    { id: 'editors', label: 'ผู้ดูแล' }
+  ];
+  var STATUS_ORDER = ['waiting', 'answered', 'dismissed'];
+  var STATUS_LABEL = { waiting: 'รอ IT ตอบ', answered: 'ตอบแล้ว', dismissed: 'ปิดเรื่อง' };
+  var FILTER_LABEL = { waiting: 'รอ IT ตอบ', answered: 'ตอบแล้ว', dismissed: 'ปิดเรื่องแล้ว' };
+  var SECRET_TEXT = 'ห้ามใส่รหัสผ่านหรือคีย์ในบทความ';
+  var LEAVE_TEXT = 'ยังมีข้อมูลที่ยังไม่ได้บันทึก ถ้าออกจากหน้านี้ข้อมูลจะหายไป';
+  var NO_SESSION_TEXT = 'กรุณาเปิดจากเมนู ถามคำถาม ใน Job Tracker';
+  var NO_ACCESS_TEXT = 'หน้านี้สำหรับทีมไอทีที่ดูแลความรู้ IT เท่านั้น ถ้าต้องการสิทธิ์ ติดต่อผู้ดูแลระบบ';
+  var OLD_BROWSER_TEXT = 'เบราว์เซอร์นี้เก่าเกินไปสำหรับหน้านี้ กรุณาอัปเดตเบราว์เซอร์ หรือเปิดด้วย Chrome หรือ Edge';
+  var ACTION_LABEL = {
+    'article.create': 'เพิ่มบทความ', 'article.update': 'แก้บทความ', 'article.delete': 'ลบบทความ',
+    'article.restore': 'กู้คืนบทความ', 'open.dismiss': 'ปิดเรื่องคำถาม', 'editors.add': 'เพิ่มผู้ดูแล',
+    'editors.remove': 'เอาผู้ดูแลออก'
+  };
+  var THAI_MONTHS = ['ม.ค.', 'ก.พ.', 'มี.ค.', 'เม.ย.', 'พ.ค.', 'มิ.ย.', 'ก.ค.', 'ส.ค.', 'ก.ย.', 'ต.ค.', 'พ.ย.', 'ธ.ค.'];
+
+  // ----- feature check: probe is { promise, fetch, asyncFn, optionalChaining } (booleans) -----
+  function missingFeatures(probe) {
+    var p = probe || {};
+    var out = [];
+    if (!p.promise) out.push('Promise');
+    if (!p.fetch) out.push('fetch');
+    if (!p.asyncFn) out.push('async functions');
+    if (!p.optionalChaining) out.push('optional chaining');
+    return out;
+  }
+  function featureMessage(probe) {
+    return missingFeatures(probe).length ? OLD_BROWSER_TEXT : '';
+  }
+
+  // ----- roles, from the kb `me` reply -----
+  function roleOf(me) {
+    if (!me || typeof me !== 'object') return 'staff';
+    if (me.isAdmin === true) return 'admin';
+    if (me.isItEditor === true) return 'editor';
+    return 'staff';
+  }
+  function canEditKb(me) { var r = roleOf(me); return r === 'admin' || r === 'editor'; }
+  function canManageEditors(me) { return roleOf(me) === 'admin'; }
+  function editorsHelpText(me) {
+    return canManageEditors(me)
+      ? 'ผู้ดูแลระบบเพิ่มหรือเอาผู้ดูแลความรู้ IT ออกได้ที่นี่ (ผู้ดูแลระบบทุกคนทำได้เหมือนผู้ดูแลความรู้ IT อยู่แล้ว)'
+      : 'ดูรายชื่อได้อย่างเดียว ผู้ดูแลระบบเท่านั้นที่เพิ่มหรือเอาผู้ดูแลออกได้';
+  }
+  function roleLabel(me) {
+    var r = roleOf(me);
+    return r === 'admin' ? 'ผู้ดูแลระบบ' : r === 'editor' ? 'ผู้ดูแลความรู้ IT' : 'พนักงาน';
+  }
+
+  // ----- tabs and labels -----
+  function tabLabel(id) {
+    for (var i = 0; i < TAB_DEFS.length; i++) if (TAB_DEFS[i].id === id) return TAB_DEFS[i].label;
+    return '';
+  }
+  function statusLabel(s) { return STATUS_LABEL[s] || 'ไม่ทราบสถานะ'; }
+  function statusTone(s) { return s === 'waiting' ? 'warn' : s === 'answered' ? 'ok' : ''; }
+  function filterLabel(s) { return FILTER_LABEL[s] || FILTER_LABEL.waiting; }
+  function nextTab(current, key) {
+    var ids = TAB_DEFS.map(function (t) { return t.id; });
+    var i = ids.indexOf(current);
+    if (i < 0) return ids[0];
+    if (key === 'ArrowRight') return ids[(i + 1) % ids.length];
+    if (key === 'ArrowLeft') return ids[(i + ids.length - 1) % ids.length];
+    if (key === 'Home') return ids[0];
+    if (key === 'End') return ids[ids.length - 1];
+    return current;
+  }
+
+  // ----- counters and text helpers -----
+  function formatInt(n) {
+    var s = String(Math.floor(Math.abs(n)));
+    var out = '';
+    for (var i = 0; i < s.length; i++) {
+      if (i && (s.length - i) % 3 === 0) out += ',';
+      out += s.charAt(i);
+    }
+    return n < 0 ? '-' + out : out;
+  }
+  function counterText(n, max) { return formatInt(n) + ' / ' + formatInt(max) + ' ตัวอักษร'; }
+  function tagsCounterText(n) { return n + ' / ' + TAGS_MAX + ' แท็ก'; }
+  function counterTone(n, max) {
+    if (n > max) return 'err';
+    if (n >= Math.floor(max * 0.9)) return 'warn';
+    return '';
+  }
+  function normalizeText(s) {
+    return typeof s === 'string' ? s.replace(/\r\n?/g, String.fromCharCode(10)) : '';
+  }
+  function excerpt(text, max) {
+    var t = normalizeText(text).replace(/\s+/g, ' ').trim();
+    return t.length > max ? t.slice(0, max) + '...' : t;
+  }
+  function thaiDate(iso) {
+    var m = /^(\d{4})-(\d{2})-(\d{2})/.exec(typeof iso === 'string' ? iso : '');
+    if (!m) return '';
+    var month = parseInt(m[2], 10);
+    var day = parseInt(m[3], 10);
+    if (month < 1 || month > 12 || day < 1 || day > 31) return '';
+    return day + ' ' + THAI_MONTHS[month - 1] + ' ' + (parseInt(m[1], 10) + 543);
+  }
+  // Timestamp -> '20 ต.ค. 2569 14:05' in Bangkok time.
+  function thaiDateTime(ts) {
+    var ms = Date.parse(ts);
+    if (isNaN(ms)) return '';
+    var iso = new Date(ms + 7 * 3600 * 1000).toISOString();
+    return thaiDate(iso.slice(0, 10)) + ' ' + iso.slice(11, 16);
+  }
+  function pageText(offset, count, total) {
+    if (!(total > 0) || !(count > 0)) return '';
+    return 'แสดง ' + formatInt(offset + 1) + '-' + formatInt(offset + count) + ' จาก ' + formatInt(total);
+  }
+  function hasNextPage(offset, count, total) { return offset + count < total; }
+
+  // ----- tags and the article form -----
+  // 'a, b,,a' -> { tags: ['a','b'], tooMany, tooLong: [..] }
+  function parseTags(text) {
+    var out = { tags: [], tooMany: false, tooLong: [] };
+    if (typeof text !== 'string') return out;
+    var parts = text.split(/[,\n،]+/);
+    for (var i = 0; i < parts.length; i++) {
+      var t = parts[i].replace(/\s+/g, ' ').trim();
+      if (!t) continue;
+      if (out.tags.indexOf(t) === -1) out.tags.push(t);
+      if (t.length > TAG_MAX && out.tooLong.indexOf(t) === -1) out.tooLong.push(t);
+    }
+    out.tooMany = out.tags.length > TAGS_MAX;
+    return out;
+  }
+  function tagsToText(tags) { return Array.isArray(tags) ? tags.join(', ') : ''; }
+  // form: { title, body, tags } with tags as the text of the tags box.
+  // Returns { ok, errors: { title, body, tags }, first: 'title'|'body'|'tags'|'', value: { title, body, tags } }.
+  function articleCheck(form) {
+    var f = form || {};
+    var title = typeof f.title === 'string' ? f.title.replace(/\s+/g, ' ').trim() : '';
+    var body = normalizeText(f.body).trim();
+    var parsed = parseTags(f.tags);
+    var errors = { title: '', body: '', tags: '' };
+    if (!title) errors.title = 'กรุณาใส่หัวข้อบทความ';
+    else if (title.length > TITLE_MAX) errors.title = 'หัวข้อยาวเกิน ' + TITLE_MAX + ' ตัวอักษร';
+    if (!body) errors.body = 'กรุณาใส่เนื้อหา (ขั้นตอนแก้ปัญหา)';
+    else if (body.length > BODY_MAX) errors.body = 'เนื้อหายาวเกิน ' + formatInt(BODY_MAX) + ' ตัวอักษร';
+    if (parsed.tooMany) errors.tags = 'ใส่แท็กได้ไม่เกิน ' + TAGS_MAX + ' แท็ก';
+    else if (parsed.tooLong.length) errors.tags = 'แท็กยาวเกิน ' + TAG_MAX + ' ตัวอักษร: ' + parsed.tooLong[0];
+    var first = errors.title ? 'title' : errors.body ? 'body' : errors.tags ? 'tags' : '';
+    return { ok: first === '', errors: errors, first: first, value: { title: title, body: body, tags: parsed.tags } };
+  }
+  function formDirty(initial, current) {
+    var a = initial || {};
+    var b = current || {};
+    return (a.title || '') !== (b.title || '') || normalizeText(a.body) !== normalizeText(b.body) || (a.tags || '') !== (b.tags || '');
+  }
+  // An Open Question becomes the draft of an article: the question is the title, cut to the limit.
+  function prefillFromOpen(row) {
+    var q = row && typeof row.question === 'string' ? row.question.replace(/\s+/g, ' ').trim() : '';
+    return { title: q.length > TITLE_MAX ? q.slice(0, TITLE_MAX) : q, body: '', tags: '', openQuestionId: row ? row.id : null };
+  }
+  function formFromArticle(a) {
+    return { title: a ? a.title : '', body: a ? a.body : '', tags: a ? tagsToText(a.tags) : '' };
+  }
+
+  // ----- secret warning -----
+  var SECRET_HINTS = [
+    /(password|passwd|pwd|api[ _\-]?key|token|secret|รหัสผ่าน)\s*[:=]\s*\S+/i,
+    /bearer\s+[A-Za-z0-9._~+\/=\-]{8,}/i,
+    /[A-Za-z0-9]{32,}/,
+    /\d(?:[ \-]?\d){12,18}/
+  ];
+  function looksSecret(text) {
+    if (typeof text !== 'string') return false;
+    for (var i = 0; i < SECRET_HINTS.length; i++) if (SECRET_HINTS[i].test(text)) return true;
+    return false;
+  }
+  // Which fields to mark after the server answers secret_detected. The server does not say which one,
+  // so mark the ones that look like a credential here; when none does, mark both.
+  function secretFields(title, body) {
+    var out = [];
+    if (looksSecret(title)) out.push('title');
+    if (looksSecret(body)) out.push('body');
+    return out.length ? out : ['title', 'body'];
+  }
+
+  // ----- errors -----
+  function errorText(status, code) {
+    if (status === 400 && code === 'secret_detected') return SECRET_TEXT;
+    if (status === 400) return 'ข้อมูลไม่ถูกต้อง ตรวจสอบแล้วลองใหม่';
+    if (status === 401) return 'เซสชันหมดอายุ กรุณากดเมนู ถามคำถาม ใน Job Tracker อีกครั้ง';
+    if (status === 403) return 'คุณไม่มีสิทธิ์ทำรายการนี้';
+    if (status === 404) return 'ไม่พบข้อมูลนี้ (อาจถูกลบไปแล้ว)';
+    if (status === 409) return 'ข้อมูลเปลี่ยนไปแล้ว กรุณาเปิดรายการใหม่แล้วลองอีกครั้ง';
+    if (status === 0) return 'ติดต่อเซิร์ฟเวอร์ไม่ได้ ลองใหม่อีกครั้ง';
+    return 'ระบบขัดข้อง ลองใหม่อีกครั้ง';
+  }
+  function isSecretError(status, code) { return status === 400 && code === 'secret_detected'; }
+  function isSessionValid(stored, now) {
+    if (!stored || typeof stored !== 'object') return false;
+    if (typeof stored.session !== 'string' || !stored.session) return false;
+    if (typeof stored.expiresAt !== 'number') return false;
+    return stored.expiresAt > now;
+  }
+  function getSsoParam(search) {
+    var v = new URLSearchParams(search).get('sso');
+    return v ? v : null;
+  }
+  function cleanUrl(pathname, search, hash) {
+    var params = new URLSearchParams(search);
+    params.delete('sso');
+    var rest = params.toString();
+    return pathname + (rest ? '?' + rest : '') + (hash || '');
+  }
+
+  // ----- request bodies (the kb function) -----
+  function meBody() { return { action: 'me' }; }
+  function openListBody(status, offset) {
+    return { action: 'open.list', status: STATUS_LABEL[status] ? status : 'waiting', offset: offset > 0 ? offset : 0, limit: LIST_PAGE };
+  }
+  function openDismissBody(id) { return { action: 'open.dismiss', id: id }; }
+  function articleListBody(q, offset) {
+    var body = { action: 'article.list', offset: offset > 0 ? offset : 0, limit: LIST_PAGE };
+    var t = typeof q === 'string' ? q.trim() : '';
+    if (t) body.q = t;
+    return body;
+  }
+  function articleGetBody(id) { return { action: 'article.get', id: id }; }
+  function articleCreateBody(value, openQuestionId) {
+    var body = { action: 'article.create', title: value.title, body: value.body, tags: value.tags };
+    if (openQuestionId !== null && openQuestionId !== undefined && openQuestionId !== '') body.openQuestionId = openQuestionId;
+    return body;
+  }
+  function articleUpdateBody(id, value) {
+    return { action: 'article.update', id: id, title: value.title, body: value.body, tags: value.tags };
+  }
+  function articleDeleteBody(id) { return { action: 'article.delete', id: id }; }
+  function editorsListBody() { return { action: 'editors.list' }; }
+  function editorsAddBody(u, n) {
+    var body = { action: 'editors.add', u: String(u).trim() };
+    var name = typeof n === 'string' ? n.trim() : '';
+    if (name) body.n = name;
+    return body;
+  }
+  function editorsRemoveBody(u) { return { action: 'editors.remove', u: u }; }
+  function logListBody(offset) { return { action: 'log.list', offset: offset > 0 ? offset : 0, limit: LOG_PAGE }; }
+
+  function userCheck(u, n) {
+    var user = typeof u === 'string' ? u.trim() : '';
+    if (!user) return { ok: false, text: 'กรุณาใส่ชื่อผู้ใช้ Job Tracker' };
+    if (/\s/.test(user)) return { ok: false, text: 'ชื่อผู้ใช้ต้องไม่มีช่องว่าง' };
+    if (user.length > USER_MAX) return { ok: false, text: 'ชื่อผู้ใช้ยาวเกิน ' + USER_MAX + ' ตัวอักษร' };
+    if (typeof n === 'string' && n.trim().length > NAME_MAX) return { ok: false, text: 'ชื่อที่แสดงยาวเกิน ' + NAME_MAX + ' ตัวอักษร' };
+    return { ok: true, text: '' };
+  }
+
+  // ----- reply readers -----
+  function rowsOf(data) {
+    if (Array.isArray(data)) return data;
+    if (data && Array.isArray(data.rows)) return data.rows;
+    return [];
+  }
+  function totalOf(data, fallback) {
+    return data && typeof data.total === 'number' ? data.total : fallback;
+  }
+  function pick(row, a, b) {
+    if (row[a] !== undefined && row[a] !== null) return row[a];
+    if (b && row[b] !== undefined && row[b] !== null) return row[b];
+    return '';
+  }
+  function normalizeOpen(row) {
+    if (!row || typeof row !== 'object' || row.id === undefined || row.id === null) return null;
+    var art = row.article && typeof row.article === 'object' ? row.article : null;
+    var artId = pick(row, 'articleId', 'article_id');
+    if (artId === '' && art) artId = art.id;
+    return {
+      id: row.id,
+      question: typeof row.question === 'string' ? row.question : '',
+      status: STATUS_LABEL[row.status] ? row.status : 'waiting',
+      askedAt: pick(row, 'askedAt', 'asked_at'),
+      n: pick(row, 'n'),
+      unit: pick(row, 'un') || pick(row, 'unit'),
+      articleId: artId,
+      handledBy: pick(row, 'handledBy', 'handled_by'),
+      handledAt: pick(row, 'handledAt', 'handled_at')
+    };
+  }
+  function normalizeArticle(row) {
+    if (!row || typeof row !== 'object' || row.id === undefined || row.id === null) return null;
+    return {
+      id: row.id,
+      title: typeof row.title === 'string' ? row.title : '',
+      body: typeof row.body === 'string' ? row.body : '',
+      tags: Array.isArray(row.tags) ? row.tags.map(String) : [],
+      updatedAt: pick(row, 'updatedAt', 'updated_at'),
+      updatedBy: pick(row, 'updatedBy', 'updated_by')
+    };
+  }
+  function normalizeEditor(row) {
+    if (!row || typeof row !== 'object' || typeof row.u !== 'string' || !row.u) return null;
+    return { u: row.u, n: pick(row, 'n'), addedAt: pick(row, 'addedAt', 'added_at'), addedBy: pick(row, 'addedBy', 'added_by') };
+  }
+  function actionLabel(a) { return ACTION_LABEL[a] || String(a || ''); }
+  function logSummary(row) {
+    var after = row && row.after && typeof row.after === 'object' ? row.after : null;
+    var before = row && row.before && typeof row.before === 'object' ? row.before : null;
+    var src = after || before;
+    if (!src) return '';
+    if (typeof src.title === 'string' && src.title) return '"' + excerpt(src.title, 80) + '"';
+    if (typeof src.u === 'string' && src.u) return src.u + (src.n ? ' (' + src.n + ')' : '');
+    if (typeof src.question === 'string' && src.question) return '"' + excerpt(src.question, 80) + '"';
+    return '';
+  }
+
+  // ----- dialog texts -----
+  function dismissMessage(question) {
+    return 'ปิดเรื่อง "' + excerpt(question, 80) + '" โดยไม่เขียนบทความ? พนักงานที่ถามจะเห็นสถานะ ปิดเรื่อง';
+  }
+  function deleteMessage(title) {
+    return 'ลบบทความ "' + excerpt(title, 80) + '"? พนักงานจะไม่เห็นบทความนี้อีก และระบบจะไม่ใช้ตอบคำถาม';
+  }
+  function removeEditorMessage(u, n) {
+    return 'เอา ' + (n ? n + ' (' + u + ')' : u) + ' ออกจากผู้ดูแลความรู้ IT? ผู้ดูแลคนนี้จะเข้าหน้านี้ไม่ได้อีก';
+  }
+  function saveDoneText(kind, embedded) {
+    var base = kind === 'answer' ? 'บันทึกบทความและปิดคำถามแล้ว' : 'บันทึกแล้ว';
+    return embedded === false ? base + ' (ยังค้นด้วยความหมายไม่ได้ แต่ค้นด้วยข้อความได้)' : base;
+  }
+  function editorTitle(kind) {
+    return kind === 'answer' ? 'ตอบคำถามเป็นบทความ' : kind === 'edit' ? 'แก้บทความ' : 'เขียนบทความใหม่';
+  }
+  // END PURE
+
+  var ICONS = {
+    alert: [['path', 'M12 9v4'], ['path', 'M12 17h.01'], ['path', 'M10.3 3.9L1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z']],
+    info: [['circle', '12,12,10'], ['path', 'M12 16v-4'], ['path', 'M12 8h.01']],
+    plus: [['path', 'M12 5v14'], ['path', 'M5 12h14']],
+    trash: [['path', 'M3 6h18'], ['path', 'M8 6V4h8v2'], ['path', 'M19 6l-1 14H6L5 6']],
+    x: [['path', 'M18 6L6 18'], ['path', 'M6 6l12 12']]
+  };
+  function icon(name) {
+    var svg = document.createElementNS(SVG_NS, 'svg');
+    svg.setAttribute('viewBox', '0 0 24 24');
+    svg.setAttribute('fill', 'none');
+    svg.setAttribute('stroke', 'currentColor');
+    svg.setAttribute('stroke-width', '2');
+    svg.setAttribute('stroke-linecap', 'round');
+    svg.setAttribute('stroke-linejoin', 'round');
+    svg.setAttribute('aria-hidden', 'true');
+    ICONS[name].forEach(function (d) {
+      var el = document.createElementNS(SVG_NS, d[0]);
+      if (d[0] === 'circle') {
+        var c = d[1].split(',');
+        el.setAttribute('cx', c[0]); el.setAttribute('cy', c[1]); el.setAttribute('r', c[2]);
+      } else {
+        el.setAttribute('d', d[1]);
+      }
+      svg.appendChild(el);
+    });
+    return svg;
+  }
+
+  function byId(id) { return document.getElementById(id); }
+  var els = {
+    who: byId('who'), msg: byId('msg'), denied: byId('denied'), deniedText: byId('deniedText'), app: byId('app'),
+    oldBrowser: byId('oldBrowser'), oldBrowserText: byId('oldBrowserText'), topBar: byId('topBar'), mainBox: byId('mainBox'),
+    tabs: byId('tabs'), backLink: byId('backLink'), scrim: byId('scrim'),
+    panelOpen: byId('panel-open'), openFilter: byId('openFilter'), openList: byId('openList'), openNote: byId('openNote'),
+    openPrev: byId('openPrev'), openNext: byId('openNext'), openPage: byId('openPage'),
+    panelArticles: byId('panel-articles'), articleSearch: byId('articleSearch'), articleSearchBtn: byId('articleSearchBtn'),
+    articleNew: byId('articleNew'), articleList: byId('articleList'), articleNote: byId('articleNote'),
+    articlePrev: byId('articlePrev'), articleNext: byId('articleNext'), articlePage: byId('articlePage'),
+    logList: byId('logList'), logMore: byId('logMore'), logNote: byId('logNote'),
+    panelEditors: byId('panel-editors'), editorsHelp: byId('editorsHelp'), editorList: byId('editorList'),
+    editorListNote: byId('editorListNote'), editorAddBox: byId('editorAddBox'), editorU: byId('editorU'),
+    editorN: byId('editorN'), editorAdd: byId('editorAdd'), editorAddNote: byId('editorAddNote'),
+    editorPanel: byId('editorPanel'), hEditor: byId('hEditor'), quote: byId('quote'), fTitle: byId('fTitle'), fBody: byId('fBody'),
+    fTags: byId('fTags'), titleCounter: byId('titleCounter'), bodyCounter: byId('bodyCounter'), tagsCounter: byId('tagsCounter'),
+    secretBox: byId('secretBox'), fSave: byId('fSave'), fCancel: byId('fCancel'), fDismiss: byId('fDismiss'),
+    fDelete: byId('fDelete'), fNote: byId('fNote')
+  };
+
+  var state = {
+    sess: null, me: null, tab: 'open', busy: false,
+    openFilter: 'waiting', openOffset: 0, openRows: [], openTotal: 0, openSeq: 0,
+    articleQuery: '', articleOffset: 0, articleSeq: 0, logOffset: 0, logSeq: 0,
+    loaded: { open: false, articles: false, editors: false },
+    flash: null, // { where, text, tone }: a note to show after the next list reload
+    edit: null // { kind: 'answer'|'new'|'edit', id, openQuestion, from, init: { title, body, tags } }
+  };
+
+  function el(tag, cls, text) {
+    var n = document.createElement(tag);
+    if (cls) n.className = cls;
+    if (text !== undefined && text !== null) n.textContent = text;
+    return n;
+  }
+  function add(parent, tag, cls, text) {
+    var n = el(tag, cls, text);
+    parent.appendChild(n);
+    return n;
+  }
+  function clear(node) { node.textContent = ''; }
+  function setNote(node, text, tone) {
+    node.textContent = text || '';
+    node.className = 'note' + (tone ? ' ' + tone : '');
+  }
+  function btn(parent, label, cls, onClick, iconName) {
+    var b = add(parent, 'button', 'btn ' + (cls || ''));
+    b.type = 'button';
+    if (iconName) { var ic = icon(iconName); ic.setAttribute('class', 'ic'); b.appendChild(ic); }
+    b.appendChild(document.createTextNode(label));
+    if (onClick) b.addEventListener('click', onClick);
+    return b;
+  }
+
+  function showMessage(text, isError) {
+    els.msg.hidden = false;
+    els.msg.className = 'panel ' + (isError ? 'error' : 'info');
+    clear(els.msg);
+    var ic = icon(isError ? 'alert' : 'info');
+    ic.setAttribute('width', '20');
+    ic.setAttribute('height', '20');
+    els.msg.appendChild(ic);
+    add(els.msg, 'div', '', text);
+  }
+  function hideMessage() { els.msg.hidden = true; clear(els.msg); }
+  function showDenied(text) {
+    els.app.hidden = true;
+    els.denied.hidden = false;
+    els.deniedText.textContent = text;
+    hideMessage();
+  }
+
+  function loadStored() {
+    try {
+      var raw = sessionStorage.getItem(STORE_KEY);
+      return raw ? JSON.parse(raw) : null;
+    } catch (e) { return null; }
+  }
+  function saveStored(obj) {
+    try { sessionStorage.setItem(STORE_KEY, JSON.stringify(obj)); } catch (e) { /* storage blocked */ }
+  }
+  function clearStored() {
+    try { sessionStorage.removeItem(STORE_KEY); } catch (e) { /* storage blocked */ }
+  }
+
+  function post(path, body, headers) {
+    var controller = new AbortController();
+    var timer = setTimeout(function () { controller.abort(); }, TIMEOUT_MS);
+    var h = { 'content-type': 'application/json' };
+    if (headers) { for (var k in headers) { h[k] = headers[k]; } }
+    return fetch(SUPABASE_URL + path, {
+      method: 'POST', headers: h, body: JSON.stringify(body), cache: 'no-store', signal: controller.signal
+    }).then(function (resp) {
+      clearTimeout(timer);
+      return resp.json().then(function (data) { return { status: resp.status, data: data }; }, function () { return { status: resp.status, data: null }; });
+    }, function () {
+      clearTimeout(timer);
+      return { status: 0, data: null };
+    });
+  }
+  // POST to the kb Edge Function. Resolves the JSON body on 200, rejects { status, code } otherwise.
+  function api(body) {
+    return post('/functions/v1/kb', body, { 'x-pqa-session': state.sess.session }).then(function (r) {
+      if (r.status === 200) return r.data;
+      if (r.status === 401) {
+        clearStored();
+        showDenied(errorText(401));
+      }
+      var err = new Error('kb ' + r.status);
+      err.status = r.status;
+      err.code = r.data && r.data.error ? String(r.data.error) : '';
+      throw err;
+    });
+  }
+  function failText(err) { return errorText(err && typeof err.status === 'number' ? err.status : 500, err && err.code); }
+
+  // ---------- dialogs ----------
+  var dialogOpen = null;
+  function openDialog(opts) {
+    return new Promise(function (resolve) {
+      var prevFocus = document.activeElement;
+      clear(els.scrim);
+      var box = add(els.scrim, 'div', 'modal');
+      box.setAttribute('role', 'dialog');
+      box.setAttribute('aria-modal', 'true');
+      var h = add(box, 'h2', '', opts.title);
+      h.id = 'dlgTitle';
+      box.setAttribute('aria-labelledby', 'dlgTitle');
+      var body = add(box, 'div', 'modal-body');
+      if (opts.build) opts.build(body);
+      var err = add(box, 'div', 'modal-err', '');
+      err.setAttribute('role', 'alert');
+      var actions = add(box, 'div', 'modal-actions');
+      var btns = [];
+      function close(value) {
+        els.scrim.className = '';
+        clear(els.scrim);
+        document.removeEventListener('keydown', onKey, true);
+        dialogOpen = null;
+        if (prevFocus && prevFocus.focus) prevFocus.focus();
+        resolve(value);
+      }
+      function setError(t) { err.textContent = t || ''; }
+      function onKey(e) {
+        if (e.key === 'Escape') { e.preventDefault(); close(null); return; }
+        if (e.key !== 'Tab') return;
+        var f = box.querySelectorAll('button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled])');
+        if (!f.length) return;
+        var first = f[0];
+        var last = f[f.length - 1];
+        if (e.shiftKey && document.activeElement === first) { e.preventDefault(); last.focus(); }
+        else if (!e.shiftKey && document.activeElement === last) { e.preventDefault(); first.focus(); }
+      }
+      opts.buttons.forEach(function (b) {
+        var bt = add(actions, 'button', 'btn ' + (b.cls || ''), b.label);
+        bt.type = 'button';
+        bt.addEventListener('click', function () { setError(''); b.run(close, setError, bt); });
+        btns.push(bt);
+      });
+      els.scrim.className = 'open';
+      dialogOpen = close;
+      document.addEventListener('keydown', onKey, true);
+      var target = btns[opts.focus || 0] || btns[0];
+      if (target) target.focus();
+    });
+  }
+  // Resolves true when the person confirms. The default focus is Cancel so Enter never confirms a delete.
+  function confirmBox(title, message, okLabel, danger) {
+    return openDialog({
+      title: title,
+      build: function (body) { add(body, 'p', '', message); },
+      focus: 0,
+      buttons: [
+        { label: 'ยกเลิก', cls: 'alt', run: function (close) { close(false); } },
+        { label: okLabel, cls: danger ? 'danger' : '', run: function (close) { close(true); } }
+      ]
+    }).then(function (v) { return v === true; });
+  }
+
+  // ---------- unsaved work ----------
+  function currentForm() { return { title: els.fTitle.value, body: els.fBody.value, tags: els.fTags.value }; }
+  function hasUnsaved() {
+    return !!state.edit && formDirty(state.edit.init, currentForm());
+  }
+  function confirmLeave() {
+    if (!hasUnsaved()) return Promise.resolve(true);
+    return confirmBox('ออกจากหน้านี้?', LEAVE_TEXT, 'ออกโดยไม่บันทึก', true);
+  }
+  window.addEventListener('beforeunload', function (e) {
+    if (!hasUnsaved()) return;
+    e.preventDefault();
+    e.returnValue = LEAVE_TEXT;
+  });
+  function guardLink(link) {
+    link.addEventListener('click', function (e) {
+      if (!hasUnsaved()) return;
+      e.preventDefault();
+      confirmLeave().then(function (ok) {
+        if (ok) { state.edit = null; window.location.href = link.getAttribute('href'); }
+      });
+    });
+  }
+
+  // ---------- tabs ----------
+  function buildTabs() {
+    clear(els.tabs);
+    TAB_DEFS.forEach(function (t) {
+      var b = add(els.tabs, 'button', 'tab', t.label);
+      b.type = 'button';
+      b.id = 'tab-' + t.id;
+      b.setAttribute('role', 'tab');
+      b.setAttribute('aria-controls', 'panel-' + t.id);
+      b.addEventListener('click', function () { selectTab(t.id, false); });
+      b.addEventListener('keydown', function (e) {
+        if (['ArrowRight', 'ArrowLeft', 'Home', 'End'].indexOf(e.key) === -1) return;
+        e.preventDefault();
+        selectTab(nextTab(state.tab, e.key), true);
+      });
+    });
+  }
+  function panelOf(id) { return id === 'open' ? els.panelOpen : id === 'articles' ? els.panelArticles : els.panelEditors; }
+  function renderTabs() {
+    TAB_DEFS.forEach(function (t) {
+      var b = byId('tab-' + t.id);
+      var on = t.id === state.tab;
+      b.setAttribute('aria-selected', on ? 'true' : 'false');
+      b.tabIndex = on ? 0 : -1;
+      panelOf(t.id).hidden = !on || !!state.edit;
+    });
+    els.editorPanel.hidden = !state.edit;
+  }
+  function selectTab(id, focusTab) {
+    if (id === state.tab && !state.edit) { if (focusTab) byId('tab-' + id).focus(); return; }
+    confirmLeave().then(function (ok) {
+      if (!ok) return;
+      state.edit = null;
+      state.tab = id;
+      renderTabs();
+      if (focusTab) byId('tab-' + id).focus();
+      ensureLoaded(id);
+    });
+  }
+  function ensureLoaded(id) {
+    if (state.loaded[id]) return;
+    state.loaded[id] = true;
+    if (id === 'open') loadOpen();
+    else if (id === 'articles') { loadArticles(); loadLog(true); }
+    else loadEditors();
+  }
+
+  // ---------- Open Questions ----------
+  function fillFilter() {
+    clear(els.openFilter);
+    STATUS_ORDER.forEach(function (s) {
+      var o = add(els.openFilter, 'option', '', filterLabel(s));
+      o.value = s;
+    });
+    els.openFilter.value = state.openFilter;
+  }
+  function takeFlash(where) {
+    var f = state.flash;
+    if (f && f.where === where) { state.flash = null; return f; }
+    return null;
+  }
+  function loadOpen() {
+    var mine = ++state.openSeq;
+    setNote(els.openNote, 'กำลังโหลด...', '');
+    api(openListBody(state.openFilter, state.openOffset)).then(function (data) {
+      if (mine !== state.openSeq) return;
+      var rows = rowsOf(data).map(normalizeOpen).filter(Boolean);
+      state.openRows = rows;
+      state.openTotal = totalOf(data, rows.length);
+      renderOpen();
+    }, function (err) {
+      if (mine !== state.openSeq) return;
+      setNote(els.openNote, failText(err), 'err');
+    });
+  }
+  function renderOpen() {
+    clear(els.openList);
+    state.openRows.forEach(function (row) {
+      var li = add(els.openList, 'li', '');
+      var wrap = add(li, 'div', 'item-row');
+      var main = add(wrap, 'button', 'item-main');
+      main.type = 'button';
+      add(main, 'span', 'item-title', excerpt(row.question, 160));
+      var meta = add(main, 'span', 'item-meta');
+      add(meta, 'span', 'tag ' + statusTone(row.status), statusLabel(row.status));
+      var who = (row.n || '') + (row.unit ? ' · ' + row.unit : '');
+      if (who) add(meta, 'span', '', who);
+      var when = thaiDateTime(row.askedAt);
+      if (when) add(meta, 'span', '', when);
+      main.setAttribute('aria-label', (row.status === 'answered' ? 'ดูบทความของคำถาม: ' : 'เขียนบทความตอบ: ') + excerpt(row.question, 80));
+      main.addEventListener('click', function () { openQuestion(row); });
+      if (row.status === 'waiting') {
+        var d = btn(wrap, 'ปิดเรื่อง', 'danger small', function () { dismissFromList(row, d); }, 'x');
+        d.setAttribute('aria-label', 'ปิดเรื่อง: ' + excerpt(row.question, 80));
+      }
+    });
+    var fl = takeFlash('open');
+    if (fl) setNote(els.openNote, fl.text, fl.tone);
+    else if (!state.openRows.length) setNote(els.openNote, state.openFilter === 'waiting' ? 'ไม่มีคำถามที่รอ IT ตอบ' : 'ไม่มีคำถามในสถานะนี้', '');
+    else setNote(els.openNote, '', '');
+    els.openPage.textContent = pageText(state.openOffset, state.openRows.length, state.openTotal);
+    els.openPrev.disabled = state.openOffset <= 0;
+    els.openNext.disabled = !hasNextPage(state.openOffset, state.openRows.length, state.openTotal);
+  }
+  function openQuestion(row) {
+    if (row.status === 'answered' && row.articleId !== '') { openArticle(row.articleId, 'open'); return; }
+    if (row.status !== 'waiting') { setNote(els.openNote, 'คำถามนี้ปิดเรื่องแล้ว', ''); return; }
+    var pre = prefillFromOpen(row);
+    startEditor({ kind: 'answer', id: null, openQuestion: row, from: 'open', init: { title: pre.title, body: pre.body, tags: pre.tags } }, true);
+  }
+  function doDismiss(row, afterFn) {
+    return confirmBox('ปิดเรื่องนี้?', dismissMessage(row.question), 'ปิดเรื่อง', true).then(function (ok) {
+      if (!ok) return false;
+      return api(openDismissBody(row.id)).then(function () { return true; }, function (err) {
+        setNote(afterFn.note, failText(err), 'err');
+        return false;
+      });
+    });
+  }
+  function dismissFromList(row, button) {
+    if (state.busy) return;
+    state.busy = true;
+    button.disabled = true;
+    doDismiss(row, { note: els.openNote }).then(function (done) {
+      state.busy = false;
+      button.disabled = false;
+      if (done) { state.flash = { where: 'open', text: 'ปิดเรื่องแล้ว', tone: 'ok' }; loadOpen(); loadLog(true); }
+    });
+  }
+
+  // ---------- Articles ----------
+  function loadArticles() {
+    var mine = ++state.articleSeq;
+    setNote(els.articleNote, 'กำลังโหลด...', '');
+    api(articleListBody(state.articleQuery, state.articleOffset)).then(function (data) {
+      if (mine !== state.articleSeq) return;
+      var rows = rowsOf(data).map(normalizeArticle).filter(Boolean);
+      var total = totalOf(data, rows.length);
+      clear(els.articleList);
+      rows.forEach(function (a) {
+        var li = add(els.articleList, 'li', '');
+        var main = add(li, 'button', 'item-main');
+        main.type = 'button';
+        main.style.width = '100%';
+        add(main, 'span', 'item-title', a.title);
+        var meta = add(main, 'span', 'item-meta');
+        a.tags.forEach(function (t) { add(meta, 'span', 'tag', t); });
+        var when = thaiDateTime(a.updatedAt);
+        if (when) add(meta, 'span', '', 'แก้ล่าสุด ' + when + (a.updatedBy ? ' โดย ' + a.updatedBy : ''));
+        main.addEventListener('click', function () { openArticle(a.id, 'articles'); });
+      });
+      var fl = takeFlash('articles');
+      if (fl) setNote(els.articleNote, fl.text, fl.tone);
+      else if (!rows.length) setNote(els.articleNote, state.articleQuery ? 'ไม่พบบทความที่ตรงกับคำค้น' : 'ยังไม่มีบทความ กด เขียนบทความใหม่', '');
+      else setNote(els.articleNote, '', '');
+      els.articlePage.textContent = pageText(state.articleOffset, rows.length, total);
+      els.articlePrev.disabled = state.articleOffset <= 0;
+      els.articleNext.disabled = !hasNextPage(state.articleOffset, rows.length, total);
+    }, function (err) {
+      if (mine !== state.articleSeq) return;
+      setNote(els.articleNote, failText(err), 'err');
+    });
+  }
+  function runSearch() {
+    state.articleQuery = els.articleSearch.value.trim();
+    state.articleOffset = 0;
+    loadArticles();
+  }
+  function openArticle(id, from) {
+    if (state.busy) return;
+    state.busy = true;
+    var noteNode = from === 'open' ? els.openNote : els.articleNote;
+    setNote(noteNode, 'กำลังเปิดบทความ...', '');
+    api(articleGetBody(id)).then(function (data) {
+      var a = normalizeArticle(data && data.article ? data.article : data);
+      if (!a) { setNote(noteNode, errorText(404), 'err'); return; }
+      setNote(noteNode, '', '');
+      startEditor({ kind: 'edit', id: a.id, openQuestion: null, from: from, init: formFromArticle(a) }, true);
+    }, function (err) {
+      setNote(noteNode, failText(err), 'err');
+    }).then(function () { state.busy = false; });
+  }
+  function newArticle() {
+    startEditor({ kind: 'new', id: null, openQuestion: null, from: 'articles', init: { title: '', body: '', tags: '' } }, true);
+  }
+
+  // ---------- editor ----------
+  function updateCounters() {
+    var t = els.fTitle.value.replace(/\s+/g, ' ').trim().length;
+    var b = normalizeText(els.fBody.value).trim().length;
+    var tg = parseTags(els.fTags.value);
+    els.titleCounter.textContent = counterText(t, TITLE_MAX);
+    els.titleCounter.className = 'counter' + (counterTone(t, TITLE_MAX) ? ' ' + counterTone(t, TITLE_MAX) : '');
+    els.bodyCounter.textContent = counterText(b, BODY_MAX);
+    els.bodyCounter.className = 'counter' + (counterTone(b, BODY_MAX) ? ' ' + counterTone(b, BODY_MAX) : '');
+    els.tagsCounter.textContent = tagsCounterText(tg.tags.length);
+    els.tagsCounter.className = 'counter' + (counterTone(tg.tags.length, TAGS_MAX) ? ' ' + counterTone(tg.tags.length, TAGS_MAX) : '');
+    els.fSave.disabled = state.busy || t > TITLE_MAX || b > BODY_MAX || tg.tooMany;
+  }
+  function markField(node, bad) {
+    if (bad) { node.classList.add('bad'); node.setAttribute('aria-invalid', 'true'); }
+    else { node.classList.remove('bad'); node.removeAttribute('aria-invalid'); }
+  }
+  function clearMarks() {
+    markField(els.fTitle, false); markField(els.fBody, false); markField(els.fTags, false);
+    els.secretBox.hidden = true;
+    clear(els.secretBox);
+  }
+  function showSecretWarning() {
+    var fields = secretFields(els.fTitle.value, els.fBody.value);
+    markField(els.fTitle, fields.indexOf('title') !== -1);
+    markField(els.fBody, fields.indexOf('body') !== -1);
+    clear(els.secretBox);
+    els.secretBox.appendChild(icon('alert'));
+    add(els.secretBox, 'span', '', SECRET_TEXT);
+    els.secretBox.hidden = false;
+    var target = fields.indexOf('title') !== -1 ? els.fTitle : els.fBody;
+    target.focus();
+  }
+  function startEditor(edit, askLeave) {
+    function go() {
+      state.edit = edit;
+      state.tab = edit.from;
+      els.fTitle.value = edit.init.title;
+      els.fBody.value = edit.init.body;
+      els.fTags.value = edit.init.tags;
+      clearMarks();
+      setNote(els.fNote, '', '');
+      els.hEditor.textContent = editorTitle(edit.kind);
+      if (edit.openQuestion) {
+        clear(els.quote);
+        var q = edit.openQuestion;
+        var when = [q.n, q.unit, thaiDateTime(q.askedAt)].filter(Boolean).join(' · ');
+        if (when) add(els.quote, 'span', 'when', 'คำถามจาก ' + when);
+        els.quote.appendChild(document.createTextNode(q.question));
+        els.quote.hidden = false;
+      } else {
+        els.quote.hidden = true;
+        clear(els.quote);
+      }
+      els.fDismiss.hidden = edit.kind !== 'answer';
+      els.fDelete.hidden = edit.kind !== 'edit';
+      els.fSave.textContent = edit.kind === 'answer' ? 'บันทึกเป็นบทความและตอบคำถาม' : 'บันทึกบทความ';
+      renderTabs();
+      updateCounters();
+      els.fTitle.focus();
+      try { els.editorPanel.scrollIntoView(); } catch (e) { /* ignore */ }
+    }
+    if (askLeave) { confirmLeave().then(function (ok) { if (ok) go(); }); } else { go(); }
+  }
+  function closeEditor() {
+    var from = state.edit ? state.edit.from : state.tab;
+    state.edit = null;
+    state.tab = from;
+    clearMarks();
+    renderTabs();
+    var tabBtn = byId('tab-' + state.tab);
+    if (tabBtn) tabBtn.focus();
+  }
+  function saveArticle() {
+    if (state.busy || !state.edit) return;
+    var chk = articleCheck(currentForm());
+    clearMarks();
+    if (!chk.ok) {
+      setNote(els.fNote, chk.errors[chk.first], 'err');
+      var node = chk.first === 'title' ? els.fTitle : chk.first === 'body' ? els.fBody : els.fTags;
+      markField(node, true);
+      node.focus();
+      return;
+    }
+    var edit = state.edit;
+    var body = edit.kind === 'edit'
+      ? articleUpdateBody(edit.id, chk.value)
+      : articleCreateBody(chk.value, edit.openQuestion ? edit.openQuestion.id : null);
+    state.busy = true;
+    updateCounters();
+    setNote(els.fNote, 'กำลังบันทึก...', '');
+    api(body).then(function (data) {
+      var embedded = data && data.embedded === false ? false : true;
+      edit.init = { title: els.fTitle.value, body: els.fBody.value, tags: els.fTags.value };
+      var text = saveDoneText(edit.kind, embedded);
+      var from = edit.from;
+      state.busy = false;
+      closeEditor();
+      refreshAfterWrite(from, text, embedded ? 'ok' : 'warn');
+    }, function (err) {
+      state.busy = false;
+      if (err && isSecretError(err.status, err.code)) {
+        setNote(els.fNote, SECRET_TEXT, 'err');
+        showSecretWarning();
+      } else {
+        setNote(els.fNote, failText(err), 'err');
+      }
+    }).then(function () { updateCounters(); });
+  }
+  function refreshAfterWrite(from, text, tone) {
+    state.flash = { where: from === 'open' ? 'open' : 'articles', text: text, tone: tone };
+    if (from === 'open') { state.loaded.articles = false; loadOpen(); } else { state.loaded.open = false; loadArticles(); }
+    loadLog(true);
+  }
+  function dismissFromEditor() {
+    if (state.busy || !state.edit || !state.edit.openQuestion) return;
+    var row = state.edit.openQuestion;
+    state.busy = true;
+    doDismiss(row, { note: els.fNote }).then(function (done) {
+      state.busy = false;
+      if (!done) return;
+      state.edit.init = currentForm();
+      closeEditor();
+      state.flash = { where: 'open', text: 'ปิดเรื่องแล้ว', tone: 'ok' };
+      loadOpen(); loadLog(true);
+    });
+  }
+  function deleteArticle() {
+    if (state.busy || !state.edit || state.edit.kind !== 'edit') return;
+    var edit = state.edit;
+    var title = els.fTitle.value;
+    state.busy = true;
+    confirmBox('ลบบทความนี้?', deleteMessage(title), 'ลบบทความ', true).then(function (ok) {
+      if (!ok) { state.busy = false; return; }
+      return api(articleDeleteBody(edit.id)).then(function () {
+        state.busy = false;
+        edit.init = currentForm();
+        var from = edit.from;
+        closeEditor();
+        refreshAfterWrite(from, 'ลบบทความแล้ว', 'ok');
+      }, function (err) {
+        state.busy = false;
+        setNote(els.fNote, failText(err), 'err');
+      });
+    });
+  }
+
+  // ---------- change history ----------
+  function loadLog(reset) {
+    if (reset) { state.logOffset = 0; }
+    var mine = ++state.logSeq;
+    api(logListBody(state.logOffset)).then(function (data) {
+      if (mine !== state.logSeq) return;
+      if (reset) clear(els.logList);
+      var rows = rowsOf(data);
+      rows.forEach(function (row) {
+        var li = add(els.logList, 'li', '');
+        add(li, 'div', 'when', thaiDateTime(row.at));
+        var line = add(li, 'div', '');
+        add(line, 'span', 'who', String(row.n || row.u || '-'));
+        add(line, 'span', '', ' ' + actionLabel(row.action));
+        var sum = logSummary(row);
+        if (sum) add(li, 'div', 'sum', sum);
+      });
+      state.logOffset += rows.length;
+      els.logMore.hidden = rows.length < LOG_PAGE;
+      setNote(els.logNote, els.logList.children.length ? '' : 'ยังไม่มีประวัติการแก้ไข', '');
+    }, function (err) {
+      if (mine !== state.logSeq) return;
+      setNote(els.logNote, failText(err), 'err');
+    });
+  }
+
+  // ---------- editors ----------
+  function loadEditors() {
+    setNote(els.editorListNote, 'กำลังโหลด...', '');
+    api(editorsListBody()).then(function (data) {
+      var rows = rowsOf(data).map(normalizeEditor).filter(Boolean);
+      clear(els.editorList);
+      var admin = canManageEditors(state.me);
+      rows.forEach(function (r) {
+        var li = add(els.editorList, 'li', '');
+        var wrap = add(li, 'div', 'item-row');
+        var info = add(wrap, 'div', '');
+        info.style.flex = '1';
+        info.style.minWidth = 'var(--size-field)';
+        add(info, 'div', 'who', r.n ? r.n + ' (' + r.u + ')' : r.u);
+        var when = thaiDateTime(r.addedAt);
+        if (when || r.addedBy) add(info, 'div', 'when', 'เพิ่มเมื่อ ' + when + (r.addedBy ? ' โดย ' + r.addedBy : ''));
+        if (admin) {
+          var b = btn(wrap, 'เอาออก', 'danger small', function () { removeEditor(r, b); }, 'trash');
+          b.setAttribute('aria-label', 'เอาผู้ดูแลออก: ' + r.u);
+        }
+      });
+      setNote(els.editorListNote, rows.length ? '' : 'ยังไม่มีผู้ดูแลที่ระบุชื่อ (ผู้ดูแลระบบทุกคนจัดการความรู้ IT ได้อยู่แล้ว)', '');
+    }, function (err) {
+      setNote(els.editorListNote, failText(err), 'err');
+    });
+  }
+  function removeEditor(r, button) {
+    if (state.busy) return;
+    state.busy = true;
+    button.disabled = true;
+    confirmBox('เอาผู้ดูแลออก?', removeEditorMessage(r.u, r.n), 'เอาออก', true).then(function (ok) {
+      if (!ok) { state.busy = false; button.disabled = false; return; }
+      return api(editorsRemoveBody(r.u)).then(function () {
+        state.busy = false;
+        setNote(els.editorListNote, 'เอาออกแล้ว', 'ok');
+        loadEditors(); loadLog(true);
+      }, function (err) {
+        state.busy = false;
+        button.disabled = false;
+        setNote(els.editorListNote, failText(err), 'err');
+      });
+    });
+  }
+  function addEditor() {
+    if (state.busy) return;
+    var chk = userCheck(els.editorU.value, els.editorN.value);
+    if (!chk.ok) { setNote(els.editorAddNote, chk.text, 'err'); els.editorU.focus(); return; }
+    state.busy = true;
+    els.editorAdd.disabled = true;
+    setNote(els.editorAddNote, 'กำลังเพิ่ม...', '');
+    api(editorsAddBody(els.editorU.value, els.editorN.value)).then(function () {
+      els.editorU.value = '';
+      els.editorN.value = '';
+      setNote(els.editorAddNote, 'เพิ่มผู้ดูแลแล้ว', 'ok');
+      loadEditors(); loadLog(true);
+    }, function (err) {
+      setNote(els.editorAddNote, failText(err), 'err');
+    }).then(function () { state.busy = false; els.editorAdd.disabled = false; });
+  }
+
+  // ---------- start ----------
+  function probeFeatures() {
+    var probe = { promise: typeof Promise !== 'undefined', fetch: typeof fetch === 'function', asyncFn: false, optionalChaining: false };
+    try { new Function('return (async function () {})'); probe.asyncFn = true; } catch (e) { /* not supported */ }
+    try { new Function('var a = null; return a?.b'); probe.optionalChaining = true; } catch (e) { /* not supported */ }
+    return probe;
+  }
+  function begin(sess) {
+    state.sess = sess;
+    var staff = sess.staff || {};
+    els.who.textContent = (staff.n || '') + (staff.un ? ' · ' + staff.un : '');
+    showMessage('กำลังตรวจสิทธิ์...', false);
+    api(meBody()).then(function (me) {
+      state.me = me;
+      hideMessage();
+      if (!canEditKb(me)) { showDenied(NO_ACCESS_TEXT); return; }
+      els.who.textContent = (els.who.textContent ? els.who.textContent + ' · ' : '') + roleLabel(me);
+      els.editorsHelp.textContent = editorsHelpText(me);
+      els.editorAddBox.hidden = !canManageEditors(me);
+      els.app.hidden = false;
+      fillFilter();
+      buildTabs();
+      state.tab = 'open';
+      renderTabs();
+      ensureLoaded('open');
+      byId('tab-open').focus();
+    }, function (err) {
+      if (err && err.status === 401) return;
+      if (err && err.status === 403) { hideMessage(); showDenied(NO_ACCESS_TEXT); return; }
+      showMessage(failText(err), true);
+    });
+  }
+  function startPage() {
+    var missing = featureMessage(probeFeatures());
+    if (missing) {
+      els.topBar.hidden = true;
+      els.mainBox.hidden = true;
+      els.oldBrowser.hidden = false;
+      els.oldBrowserText.textContent = missing;
+      return;
+    }
+    var sso = getSsoParam(window.location.search);
+    if (sso !== null) {
+      try { history.replaceState(null, '', cleanUrl(window.location.pathname, window.location.search, window.location.hash)); } catch (e) { /* ignore */ }
+      showMessage('กำลังเข้าสู่ระบบ...', false);
+      post('/functions/v1/session', { link: sso }).then(function (r) {
+        if (r.status === 200 && r.data && typeof r.data.session === 'string') {
+          var sess = {
+            session: r.data.session, staff: r.data.staff || {}, isAdmin: !!r.data.isAdmin,
+            canManage: !!r.data.canManage, expiresAt: r.data.expiresAt
+          };
+          saveStored(sess);
+          begin(sess);
+        } else {
+          showDenied(r.status === 401 ? errorText(401) : errorText(0));
+        }
+      });
+      return;
+    }
+    var stored = loadStored();
+    if (!isSessionValid(stored, Date.now())) {
+      clearStored();
+      showDenied(NO_SESSION_TEXT);
+      return;
+    }
+    begin(stored);
+  }
+
+  els.openFilter.addEventListener('change', function () {
+    state.openFilter = els.openFilter.value;
+    state.openOffset = 0;
+    loadOpen();
+  });
+  els.openPrev.addEventListener('click', function () { state.openOffset = Math.max(0, state.openOffset - LIST_PAGE); loadOpen(); });
+  els.openNext.addEventListener('click', function () { state.openOffset += LIST_PAGE; loadOpen(); });
+  els.articleSearchBtn.addEventListener('click', runSearch);
+  els.articleSearch.addEventListener('keydown', function (e) { if (e.key === 'Enter') { e.preventDefault(); runSearch(); } });
+  els.articleNew.addEventListener('click', newArticle);
+  els.articlePrev.addEventListener('click', function () { state.articleOffset = Math.max(0, state.articleOffset - LIST_PAGE); loadArticles(); });
+  els.articleNext.addEventListener('click', function () { state.articleOffset += LIST_PAGE; loadArticles(); });
+  els.logMore.addEventListener('click', function () { loadLog(false); });
+  els.editorAdd.addEventListener('click', addEditor);
+  els.editorU.addEventListener('keydown', function (e) { if (e.key === 'Enter') { e.preventDefault(); addEditor(); } });
+  [els.fTitle, els.fBody, els.fTags].forEach(function (n) {
+    n.addEventListener('input', function () { updateCounters(); markField(n, false); if (!els.fTitle.classList.contains('bad') && !els.fBody.classList.contains('bad')) { els.secretBox.hidden = true; } });
+  });
+  els.fSave.addEventListener('click', saveArticle);
+  els.fCancel.addEventListener('click', function () {
+    confirmLeave().then(function (ok) { if (ok) closeEditor(); });
+  });
+  els.fDismiss.addEventListener('click', dismissFromEditor);
+  els.fDelete.addEventListener('click', deleteArticle);
+  guardLink(els.backLink);
+
+  startPage();
+})();
+</script>
+</body>
+</html>

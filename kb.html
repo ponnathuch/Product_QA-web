@@ -102,6 +102,27 @@
   #pdfKindWrap { flex: 1 1 var(--size-field); min-width: 0; }
   .draft .src { color: var(--c-ink-3); font-size: var(--fs-xs); margin: var(--space-2) 0 0; word-break: break-word; }
 
+  /* ---------- article pictures ---------- */
+  .pic-sec { margin-top: var(--space-4); padding-top: var(--space-3); border-top: 1px solid var(--c-line); }
+  .pic-head { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-2); }
+  .pic-head h3 { margin: 0; }
+  .pic-list { list-style: none; margin: var(--space-3) 0 0; padding: 0; display: flex; flex-direction: column; gap: var(--space-3); }
+  .pic-item { display: grid; grid-template-columns: var(--size-tile) 1fr; gap: var(--space-3); padding: var(--space-3); border: 1px solid var(--c-line-strong); border-radius: var(--radius-m); background: var(--c-surface); }
+  .pic-thumb { width: var(--size-tile); height: var(--size-tile); display: flex; align-items: center; justify-content: center; border: 1px solid var(--c-line); border-radius: var(--radius-s); background: var(--c-img-backing); color: var(--c-ink-3); font-size: var(--fs-xs); text-align: center; overflow: hidden; }
+  .pic-thumb img { max-width: 100%; max-height: 100%; object-fit: contain; }
+  .pic-main { min-width: 0; }
+  .pic-main label.lbl { margin-top: 0; }
+  .pic-actions { grid-column: 1 / -1; display: flex; flex-wrap: wrap; gap: var(--space-2); align-items: center; }
+  .pic-saved { color: var(--c-ok); font-size: var(--fs-xs); }
+  .draft-pic { display: flex; flex-wrap: wrap; gap: var(--space-3); margin-top: var(--space-3); padding: var(--space-3); border: 1px dashed var(--c-line-strong); border-radius: var(--radius-m); background: var(--c-surface-2); }
+  .draft-pic .pic-thumb { flex: 0 0 var(--size-tile); }
+  .draft-pic .pic-main { flex: 1 1 var(--size-field); }
+  .draft-pic .pic-check { display: flex; gap: var(--space-2); align-items: center; font-weight: bold; color: var(--c-ink-2); }
+  .draft-pic .pic-check input { width: var(--size-icon); height: var(--size-icon); }
+  @media (prefers-color-scheme: dark) {
+    .pic-thumb { --c-img-backing: var(--c-surface-2); }
+  }
+
   #oldBrowser { max-width: var(--max-narrow); margin: var(--space-6) auto; padding: 0 var(--space-4); }
 
   @media (max-width: 520px) {
@@ -111,6 +132,8 @@
     main { padding: 0 var(--space-3) var(--space-6); }
     .btn { min-height: var(--size-target-lg); }
     .tab { flex: 1 1 auto; }
+    .pic-item { grid-template-columns: 1fr; }
+    .pic-thumb { width: 100%; }
   }
 </style>
 </head>
@@ -232,6 +255,19 @@
       <label class="lbl" for="fTags">แท็ก (คั่นด้วยจุลภาค เช่น POS, เครื่องพิมพ์)</label>
       <input type="text" id="fTags" class="input" autocomplete="off" aria-describedby="tagsCounter">
       <div id="tagsCounter" class="counter" aria-live="off"></div>
+      <section id="picSection" class="pic-sec" aria-labelledby="picHead" hidden>
+        <div class="pic-head">
+          <h3 id="picHead">ภาพประกอบ</h3>
+          <span id="picCount" class="tag"></span>
+        </div>
+        <p class="note">ห้ามมีข้อมูลลูกค้า รหัสผ่าน หรือเลขบัตรในรูป ครอบตัดก่อนแนบ</p>
+        <div class="actions">
+          <button type="button" id="picAdd" class="btn alt">เพิ่มรูป</button>
+          <input type="file" id="picFile" accept="image/jpeg,image/png,image/webp" multiple hidden>
+        </div>
+        <p id="picNote" class="note" role="status" aria-live="polite"></p>
+        <ul id="picList" class="pic-list"></ul>
+      </section>
       <div id="secretBox" class="warnbox" role="alert" hidden></div>
       <div class="actions">
         <button type="button" id="fSave" class="btn">บันทึกบทความ</button>
@@ -265,6 +301,8 @@
   var TIMEOUT_MS = 30000;
   var STORE_KEY = 'pqa.session';
   var SVG_NS = 'http://www.w3.org/2000/svg';
+  var ALLOW_LOCAL = false; // data: / blob: pictures only for the dev mock
+  try { ALLOW_LOCAL = window.__pqaMock === true || new URLSearchParams(window.location.search).get('mockrole') !== null; } catch (e) { ALLOW_LOCAL = false; }
 
   // BEGIN PURE
   var TITLE_MAX = 200;
@@ -291,7 +329,9 @@
   var ACTION_LABEL = {
     'article.create': 'เพิ่มบทความ', 'article.update': 'แก้บทความ', 'article.delete': 'ลบบทความ',
     'article.restore': 'กู้คืนบทความ', 'open.dismiss': 'ปิดเรื่องคำถาม', 'editors.add': 'เพิ่มผู้ดูแล',
-    'editors.remove': 'เอาผู้ดูแลออก'
+    'editors.remove': 'เอาผู้ดูแลออก',
+    'image.attach': 'แนบรูป', 'image.update': 'แก้คำบรรยายรูป', 'image.order': 'เรียงรูปใหม่', 'image.remove': 'ลบรูป',
+    'image.sweep': 'ล้างรูปที่ค้าง'
   };
   var THAI_MONTHS = ['ม.ค.', 'ก.พ.', 'มี.ค.', 'เม.ย.', 'พ.ค.', 'มิ.ย.', 'ก.ค.', 'ส.ค.', 'ก.ย.', 'ต.ค.', 'พ.ย.', 'ธ.ค.'];
 
@@ -453,16 +493,24 @@
   }
   // Which fields to mark after the server answers secret_detected. The server does not say which one,
   // so mark the ones that look like a credential here; when none does, mark both.
-  function secretFields(title, body) {
+  // captions (optional): the picture captions; 'caption' is added when one of them looks like a credential.
+  function secretFields(title, body, captions) {
     var out = [];
+    var caps = Array.isArray(captions) ? captions : [];
     if (looksSecret(title)) out.push('title');
     if (looksSecret(body)) out.push('body');
-    return out.length ? out : ['title', 'body'];
+    if (caps.some(looksSecret)) out.push('caption');
+    if (out.length) return out;
+    return caps.some(function (c) { return typeof c === 'string' && c; }) ? ['title', 'body', 'caption'] : ['title', 'body'];
   }
 
   // ----- errors -----
   function errorText(status, code) {
     if (status === 400 && code === 'secret_detected') return SECRET_TEXT;
+    if (status === 409 && code === 'too_many_images') return PIC_LIMIT_TEXT;
+    if (status === 400 && code === 'image_missing') return 'อัปโหลดรูปไม่ครบ ลองใหม่อีกครั้ง';
+    if (status === 429 && code === 'daily_limit') return 'วันนี้อัปโหลดรูปครบจำนวนแล้ว ลองใหม่พรุ่งนี้';
+    if (status === 502 && code === 'storage_error') return 'ระบบเก็บรูปขัดข้อง ลองใหม่อีกครั้ง';
     if (status === 400) return 'ข้อมูลไม่ถูกต้อง ตรวจสอบแล้วลองใหม่';
     if (status === 401) return 'เซสชันหมดอายุ กรุณากดเมนู ถามคำถาม ใน Job Tracker อีกครั้ง';
     if (status === 403) return 'คุณไม่มีสิทธิ์ทำรายการนี้';
@@ -502,9 +550,18 @@
     return body;
   }
   function articleGetBody(id) { return { action: 'article.get', id: id }; }
-  function articleCreateBody(value, openQuestionId) {
+  // images (optional): [{ imageId, caption, width, height }] uploaded earlier through image.begin.
+  function articleCreateBody(value, openQuestionId, images) {
     var body = { action: 'article.create', title: value.title, body: value.body, tags: value.tags };
     if (openQuestionId !== null && openQuestionId !== undefined && openQuestionId !== '') body.openQuestionId = openQuestionId;
+    if (Array.isArray(images) && images.length) {
+      body.images = images.map(function (im) {
+        var o = { imageId: im.imageId, width: im.width, height: im.height };
+        var c = captionClean(im.caption);
+        if (c) o.caption = c;
+        return o;
+      });
+    }
     return body;
   }
   function articleUpdateBody(id, value) {
@@ -569,7 +626,17 @@
       body: typeof row.body === 'string' ? row.body : '',
       tags: Array.isArray(row.tags) ? row.tags.map(String) : [],
       updatedAt: pick(row, 'updatedAt', 'updated_at'),
-      updatedBy: pick(row, 'updatedBy', 'updated_by')
+      updatedBy: pick(row, 'updatedBy', 'updated_by'),
+      imageCount: typeof row.imageCount === 'number' && row.imageCount > 0 ? Math.floor(row.imageCount) : 0,
+      images: Array.isArray(row.images) ? row.images.map(normalizeImage).filter(Boolean) : []
+    };
+  }
+  function normalizeImage(im) {
+    if (!im || typeof im !== 'object' || im.id === undefined || im.id === null) return null;
+    return {
+      id: im.id, caption: typeof im.caption === 'string' ? im.caption : '', seq: typeof im.seq === 'number' ? im.seq : 0,
+      width: typeof im.width === 'number' ? im.width : 0, height: typeof im.height === 'number' ? im.height : 0,
+      url: typeof im.url === 'string' ? im.url : '', thumbUrl: typeof im.thumbUrl === 'string' ? im.thumbUrl : ''
     };
   }
   function normalizeEditor(row) {
@@ -585,6 +652,9 @@
     if (typeof src.title === 'string' && src.title) return '"' + excerpt(src.title, 80) + '"';
     if (typeof src.u === 'string' && src.u) return src.u + (src.n ? ' (' + src.n + ')' : '');
     if (typeof src.question === 'string' && src.question) return '"' + excerpt(src.question, 80) + '"';
+    if (typeof src.caption === 'string' && src.caption) return 'คำบรรยาย "' + excerpt(src.caption, 80) + '"';
+    if (typeof src.count === 'number') return formatInt(src.count) + ' รายการ';
+    if (Array.isArray(src.imageIds)) return src.imageIds.length + ' รูป';
     return '';
   }
 
@@ -775,9 +845,113 @@
     if (!pdf || pdf.phase === 'done' || !Array.isArray(pdf.drafts)) return false;
     return pdf.drafts.some(function (d) { return d.status !== 'saved'; });
   }
+
+  // ----- article pictures -----
+  var PIC_MAX = 4;
+  var PIC_MAIN_MAX = 1600;
+  var PIC_THUMB_MAX = 360;
+  var PIC_THUMB_QUALITY = 0.75;
+  var PIC_MAIN_BYTES = 3145728;
+  var PIC_SRC_BYTES = 15 * 1024 * 1024;
+  var CAPTION_MAX = 200;
+  var PIC_LIMIT_TEXT = 'แนบได้ไม่เกิน 4 รูปต่อบทความ';
+  var PIC_TOO_BIG_TEXT = 'รูปใหญ่เกิน 3 MB หลังย่อ';
+  var PIC_READ_FAIL_TEXT = 'อ่านรูปไม่ได้ ลองรูปอื่น';
+  var PIC_UPLOAD_FAIL_TEXT = 'อัปโหลดรูปไม่สำเร็จ ลองเพิ่มรูปอีกครั้ง';
+  var DRAFT_PIC_FAIL_TEXT = 'อัปโหลดรูปไม่สำเร็จ ลองบันทึกอีกครั้ง';
+  var PIC_REMINDER = 'ห้ามมีข้อมูลลูกค้า รหัสผ่าน หรือเลขบัตรในรูป ครอบตัดก่อนแนบ';
+  var PIC_PATH = '/storage/v1/object/sign/kb-images/';
+  var PIC_UPLOAD_PATH = '/storage/v1/object/upload/sign/kb-images/';
+  // Retry steps when the main picture is still over 3 MB: quality 0.85 at 1600, then 0.7 at 1600, then 0.7 at 1280.
+  var SHRINK_STEPS = [{ side: 1600, quality: 0.85 }, { side: 1600, quality: 0.7 }, { side: 1280, quality: 0.7 }];
+  function fitSize(w, h, max) {
+    if (!(w > 0) || !(h > 0) || !(max > 0)) return { width: 0, height: 0 };
+    var scale = Math.min(1, max / Math.max(w, h));
+    return { width: Math.max(1, Math.round(w * scale)), height: Math.max(1, Math.round(h * scale)) };
+  }
+  // tried = attempts made so far, bytes = size of the last attempt (null before the first).
+  // -> { ok: true } | { fail: true, text } | { side, quality, width, height } for the next attempt.
+  function shrinkPlan(w, h, bytes, tried) {
+    var t = tried > 0 ? tried : 0;
+    if (t > 0 && typeof bytes === 'number' && bytes <= PIC_MAIN_BYTES) return { ok: true };
+    if (t >= SHRINK_STEPS.length) return { fail: true, text: PIC_TOO_BIG_TEXT };
+    var s = SHRINK_STEPS[t];
+    var sz = fitSize(w, h, s.side);
+    return { side: s.side, quality: s.quality, width: sz.width, height: sz.height };
+  }
+  function thumbPlan(w, h) {
+    var sz = fitSize(w, h, PIC_THUMB_MAX);
+    return { side: PIC_THUMB_MAX, quality: PIC_THUMB_QUALITY, width: sz.width, height: sz.height };
+  }
+  // A picked file before it is decoded: a picture type and at most 15 MB.
+  function picSourceCheck(file) {
+    var name = file && typeof file.name === 'string' ? file.name : '';
+    var type = file && typeof file.type === 'string' ? file.type.toLowerCase() : '';
+    var okType = type === 'image/jpeg' || type === 'image/jpg' || type === 'image/png' || type === 'image/webp' ||
+      (!type && /[.](jpe?g|png|webp)$/i.test(name));
+    if (!okType) return { ok: false, text: 'เลือกได้เฉพาะรูป JPG, PNG หรือ WebP' };
+    if (!(file.size > 0)) return { ok: false, text: 'ไฟล์นี้ว่างเปล่า' };
+    if (file.size > PIC_SRC_BYTES) return { ok: false, text: 'ไฟล์ใหญ่เกิน 15 MB' };
+    return { ok: true, text: '' };
+  }
+  function picCounterText(n) { return 'รูป ' + n + ' / ' + PIC_MAX; }
+  // have = pictures in the form, picked = files chosen. -> { allow, skipped, full, text }
+  function canAddPictures(have, picked) {
+    var room = Math.max(0, PIC_MAX - (have > 0 ? have : 0));
+    var want = picked > 0 ? picked : 0;
+    var allow = Math.min(room, want);
+    return { allow: allow, skipped: want - allow, full: room === 0, text: want > allow ? PIC_LIMIT_TEXT : '' };
+  }
+  // New array with item i moved by dir (-1 up, +1 down); the same order when it cannot move.
+  function moveItem(list, i, dir) {
+    var out = Array.isArray(list) ? list.slice() : [];
+    var j = i + dir;
+    if (i < 0 || i >= out.length || j < 0 || j >= out.length || (dir !== -1 && dir !== 1)) return out;
+    var tmp = out[i];
+    out[i] = out[j];
+    out[j] = tmp;
+    return out;
+  }
+  function captionClean(s) { return typeof s === 'string' ? s.replace(/\s+/g, ' ').trim() : ''; }
+  function captionLength(s) { return captionClean(s).length; }
+  function captionError(s) { return captionLength(s) > CAPTION_MAX ? 'คำบรรยายยาวเกิน ' + CAPTION_MAX + ' ตัวอักษร' : ''; }
+  // Signed Storage URL of this project; data: and blob: only for the dev mock or local previews (allowLocal).
+  function picUrlOk(url, baseUrl, allowLocal) {
+    if (typeof url !== 'string' || !url) return false;
+    if (typeof baseUrl === 'string' && baseUrl && url.indexOf(baseUrl + PIC_PATH) === 0) return true;
+    return allowLocal === true && /^(data:image[/]|blob:)/i.test(url);
+  }
+  function isUploadUrlOk(url, baseUrl) {
+    if (typeof url !== 'string' || !url) return false;
+    if (url.indexOf(baseUrl + PIC_UPLOAD_PATH) === 0) return true;
+    return !/^[a-z][a-z0-9+.\-]*:/i.test(url) && url.indexOf('//') !== 0 && url.indexOf('..') === -1;
+  }
+  function imageBeginBody(count) { return { action: 'image.begin', count: count }; }
+  function imageAttachBody(articleId, imageId, caption, width, height) {
+    var body = { action: 'image.attach', articleId: articleId, imageId: imageId, width: width, height: height };
+    var c = captionClean(caption);
+    if (c) body.caption = c;
+    return body;
+  }
+  function imageUpdateBody(imageId, caption) { return { action: 'image.update', imageId: imageId, caption: captionClean(caption) }; }
+  function imageOrderBody(articleId, imageIds) { return { action: 'image.order', articleId: articleId, imageIds: imageIds }; }
+  function imageRemoveBody(imageId) { return { action: 'image.remove', imageId: imageId }; }
+  function imagesSignBody(articleIds) { return { action: 'images.sign', articleIds: articleIds }; }
+  function removePicMessage(isSaved) {
+    return isSaved ? 'ลบรูปนี้ออกจากบทความ? รูปจะหายไปจากคำตอบของสาขาทันที' : 'เอารูปนี้ออกจากบทความที่กำลังเขียน?';
+  }
+  // article.create reply -> a warning when fewer pictures were attached than sent, else ''.
+  function imagesAttachedText(sent, data) {
+    var n = data && typeof data.imagesAttached === 'number' ? data.imagesAttached : sent;
+    if (!(sent > 0) || n >= sent) return '';
+    return 'บันทึกบทความแล้ว แต่แนบรูปได้ ' + n + ' จาก ' + sent + ' รูป เปิดบทความเพื่อเพิ่มรูปที่เหลือ';
+  }
   // END PURE
 
   var ICONS = {
+    up: [['path', 'M12 19V5'], ['path', 'M5 12l7-7 7 7']],
+    down: [['path', 'M12 5v14'], ['path', 'M19 12l-7 7-7-7']],
+    image: [['path', 'M5 3h14a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2z'], ['path', 'M21 15l-5-5L5 21'], ['circle', '9,9,2']],
     alert: [['path', 'M12 9v4'], ['path', 'M12 17h.01'], ['path', 'M10.3 3.9L1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z']],
     info: [['circle', '12,12,10'], ['path', 'M12 16v-4'], ['path', 'M12 8h.01']],
     plus: [['path', 'M12 5v14'], ['path', 'M5 12h14']],
@@ -837,6 +1011,7 @@
     loaded: { open: false, articles: false, editors: false },
     flash: null, // { where, text, tone }: a note to show after the next list reload
     edit: null, // { kind: 'answer'|'new'|'edit', id, openQuestion, from, init: { title, body, tags } }
+    pics: null, // { items, articleId, queue, resigned, moving, imagesError }: the picture section of the open form
     pdf: null // { name, drafts: [...], pageCount, costUsd, phase: 'review'|'saving'|'done' }
   };
 
@@ -993,7 +1168,7 @@
   // ---------- unsaved work ----------
   function currentForm() { return { title: els.fTitle.value, body: els.fBody.value, tags: els.fTags.value }; }
   function hasUnsaved() {
-    return (!!state.edit && formDirty(state.edit.init, currentForm())) || pdfUnsaved(state.pdf);
+    return (!!state.edit && formDirty(state.edit.init, currentForm())) || newPicsUnsaved() || pdfUnsaved(state.pdf);
   }
   function confirmLeave() {
     if (!hasUnsaved()) return Promise.resolve(true);
@@ -1048,6 +1223,7 @@
     confirmLeave().then(function (ok) {
       if (!ok) return;
       state.edit = null;
+      releasePics();
       state.pdf = null;
       state.tab = id;
       renderTabs();
@@ -1162,6 +1338,7 @@
         main.style.width = '100%';
         add(main, 'span', 'item-title', a.title);
         var meta = add(main, 'span', 'item-meta');
+        if (a.imageCount > 0) add(meta, 'span', 'tag ok', 'รูป ' + a.imageCount);
         a.tags.forEach(function (t) { add(meta, 'span', 'tag', t); });
         var when = thaiDateTime(a.updatedAt);
         if (when) add(meta, 'span', '', 'แก้ล่าสุด ' + when + (a.updatedBy ? ' โดย ' + a.updatedBy : ''));
@@ -1193,7 +1370,7 @@
       var a = normalizeArticle(data && data.article ? data.article : data);
       if (!a) { setNote(noteNode, errorText(404), 'err'); return; }
       setNote(noteNode, '', '');
-      startEditor({ kind: 'edit', id: a.id, openQuestion: null, from: from, init: formFromArticle(a) }, true);
+      startEditor({ kind: 'edit', id: a.id, openQuestion: null, from: from, init: formFromArticle(a), images: a.images, imagesError: !!(data && data.imagesError) }, true);
     }, function (err) {
       setNote(noteNode, failText(err), 'err');
     }).then(function () { state.busy = false; });
@@ -1213,7 +1390,7 @@
     els.bodyCounter.className = 'counter' + (counterTone(b, BODY_MAX) ? ' ' + counterTone(b, BODY_MAX) : '');
     els.tagsCounter.textContent = tagsCounterText(tg.tags.length);
     els.tagsCounter.className = 'counter' + (counterTone(tg.tags.length, TAGS_MAX) ? ' ' + counterTone(tg.tags.length, TAGS_MAX) : '');
-    els.fSave.disabled = state.busy || t > TITLE_MAX || b > BODY_MAX || tg.tooMany;
+    els.fSave.disabled = state.busy || t > TITLE_MAX || b > BODY_MAX || tg.tooMany || (!!state.edit && state.edit.kind !== 'edit' && picsBusy());
   }
   function markField(node, bad) {
     if (bad) { node.classList.add('bad'); node.setAttribute('aria-invalid', 'true'); }
@@ -1225,14 +1402,23 @@
     clear(els.secretBox);
   }
   function showSecretWarning() {
-    var fields = secretFields(els.fTitle.value, els.fBody.value);
+    var caps = picCaptions();
+    var fields = secretFields(els.fTitle.value, els.fBody.value, caps);
     markField(els.fTitle, fields.indexOf('title') !== -1);
     markField(els.fBody, fields.indexOf('body') !== -1);
+    var capNode = null;
+    if (fields.indexOf('caption') !== -1 && state.pics) {
+      var anyCap = state.pics.items.some(function (it) { return looksSecret(it.caption); });
+      state.pics.items.forEach(function (it) {
+        var bad = anyCap ? looksSecret(it.caption) : !!captionClean(it.caption);
+        if (it.ui && it.ui.input) { markField(it.ui.input, bad); if (bad && !capNode) capNode = it.ui.input; }
+      });
+    }
     clear(els.secretBox);
     els.secretBox.appendChild(icon('alert'));
     add(els.secretBox, 'span', '', SECRET_TEXT);
     els.secretBox.hidden = false;
-    var target = fields.indexOf('title') !== -1 ? els.fTitle : els.fBody;
+    var target = fields.indexOf('title') !== -1 ? els.fTitle : fields.indexOf('body') !== -1 ? els.fBody : (capNode || els.fBody);
     target.focus();
   }
   function startEditor(edit, askLeave) {
@@ -1259,6 +1445,7 @@
       els.fDismiss.hidden = edit.kind !== 'answer';
       els.fDelete.hidden = edit.kind !== 'edit';
       els.fSave.textContent = edit.kind === 'answer' ? 'บันทึกเป็นบทความและตอบคำถาม' : 'บันทึกบทความ';
+      initPics(edit);
       renderTabs();
       updateCounters();
       els.fTitle.focus();
@@ -1269,6 +1456,7 @@
   function closeEditor() {
     var from = state.edit ? state.edit.from : state.tab;
     state.edit = null;
+    releasePics();
     state.tab = from;
     clearMarks();
     renderTabs();
@@ -1287,9 +1475,20 @@
       return;
     }
     var edit = state.edit;
+    var imgs = null;
+    if (edit.kind !== 'edit' && state.pics && state.pics.items.length) {
+      var pit = state.pics.items;
+      if (picsBusy()) { setNote(els.fNote, 'รอให้อัปโหลดรูปเสร็จก่อน', 'warn'); return; }
+      if (pit.some(function (it) { return it.status === 'error'; })) { setNote(els.fNote, 'มีรูปที่อัปโหลดไม่สำเร็จ ลบรูปนั้นก่อนบันทึก', 'err'); return; }
+      for (var pi = 0; pi < pit.length; pi++) {
+        var ce = captionError(pit[pi].caption);
+        if (ce) { setNote(els.fNote, ce, 'err'); if (pit[pi].ui && pit[pi].ui.input) { markField(pit[pi].ui.input, true); pit[pi].ui.input.focus(); } return; }
+      }
+      imgs = pit.map(function (it) { return { imageId: it.imageId, caption: it.caption, width: it.width, height: it.height }; });
+    }
     var body = edit.kind === 'edit'
       ? articleUpdateBody(edit.id, chk.value)
-      : articleCreateBody(chk.value, edit.openQuestion ? edit.openQuestion.id : null);
+      : articleCreateBody(chk.value, edit.openQuestion ? edit.openQuestion.id : null, imgs);
     state.busy = true;
     updateCounters();
     setNote(els.fNote, 'กำลังบันทึก...', '');
@@ -1297,10 +1496,11 @@
       var embedded = data && data.embedded === false ? false : true;
       edit.init = { title: els.fTitle.value, body: els.fBody.value, tags: els.fTags.value };
       var text = saveDoneText(edit.kind, embedded);
+      var attachedWarn = imgs ? imagesAttachedText(imgs.length, data) : '';
       var from = edit.from;
       state.busy = false;
       closeEditor();
-      refreshAfterWrite(from, text, embedded ? 'ok' : 'warn');
+      refreshAfterWrite(from, attachedWarn || text, embedded && !attachedWarn ? 'ok' : 'warn');
     }, function (err) {
       state.busy = false;
       if (err && isSecretError(err.status, err.code)) {
@@ -1345,6 +1545,351 @@
       }, function (err) {
         state.busy = false;
         setNote(els.fNote, failText(err), 'err');
+      });
+    });
+  }
+
+  // ---------- article pictures ----------
+  var pe = { sec: byId('picSection'), count: byId('picCount'), add: byId('picAdd'), file: byId('picFile'), note: byId('picNote'), list: byId('picList') };
+  var picKeySeq = 0;
+  function picsNote(text, tone) { setNote(pe.note, text, tone); }
+  function newPicItem() {
+    picKeySeq += 1;
+    return { key: 'p' + picKeySeq, imageId: null, caption: '', savedCaption: '', width: 0, height: 0, preview: '', blobUrl: false, status: 'ready', msg: '', live: false, res: null, file: null, ui: null, savedTimer: null };
+  }
+  function picsBusy() { return !!state.pics && state.pics.items.some(function (it) { return it.status === 'working'; }); }
+  function picCaptions() { return state.pics ? state.pics.items.map(function (it) { return it.caption; }) : []; }
+  function newPicsUnsaved() { return !!state.edit && state.edit.kind !== 'edit' && !!state.pics && state.pics.items.length > 0; }
+  function initPics(edit) {
+    releasePics();
+    var items = (edit.images || []).map(function (im) {
+      var it = newPicItem();
+      it.imageId = im.id; it.caption = im.caption; it.savedCaption = captionClean(im.caption);
+      it.width = im.width; it.height = im.height; it.live = true;
+      it.preview = picUrlOk(im.thumbUrl || im.url, SUPABASE_URL, ALLOW_LOCAL) ? (im.thumbUrl || im.url) : '';
+      return it;
+    });
+    state.pics = { items: items, articleId: edit.kind === 'edit' ? edit.id : null, queue: Promise.resolve(), resigned: false, moving: false, imagesError: !!edit.imagesError };
+    picsNote(edit.imagesError ? 'โหลดรูปของบทความนี้ไม่ได้ ลองเปิดบทความใหม่อีกครั้ง' : '', edit.imagesError ? 'err' : '');
+    renderPics();
+  }
+  function releasePics() {
+    var pics = state.pics;
+    state.pics = null;
+    if (!pics) return;
+    pics.items.forEach(function (it) {
+      if (it.blobUrl && it.preview) { try { URL.revokeObjectURL(it.preview); } catch (e) { /* ignore */ } }
+    });
+    pe.sec.hidden = true;
+    clear(pe.list);
+  }
+  function eachSeq(list, fn) {
+    var p = Promise.resolve();
+    list.forEach(function (x, i) { p = p.then(function () { return fn(x, i); }); });
+    return p;
+  }
+  function renderPics(focus) {
+    var pics = state.pics;
+    clear(pe.list);
+    if (!pics) { pe.sec.hidden = true; return; }
+    pe.sec.hidden = false;
+    var n = pics.items.length;
+    pe.count.textContent = picCounterText(n);
+    pe.add.disabled = n >= PIC_MAX || pics.imagesError;
+    var locked = picsBusy() || pics.moving;
+    pics.items.forEach(function (it, i) { buildPicItem(it, i, n, locked); });
+    updateCounters();
+    if (focus) {
+      var target = pe.list.querySelector('[data-pic="' + focus + '"]');
+      if (target && target.disabled) target = pe.list.querySelector('[data-pic="' + focus.replace(/:(up|down)$/, function (m, d) { return d === 'up' ? ':down' : ':up'; }) + '"]');
+      if (target && !target.disabled) target.focus();
+    }
+  }
+  function paintCapCounter(it) {
+    var n = captionLength(it.caption);
+    it.ui.counter.textContent = counterText(n, CAPTION_MAX);
+    it.ui.counter.className = 'counter' + (counterTone(n, CAPTION_MAX) ? ' ' + counterTone(n, CAPTION_MAX) : '');
+  }
+  function buildPicItem(it, i, n, locked) {
+    var ui = {};
+    it.ui = ui;
+    var li = add(pe.list, 'li', 'pic-item');
+    var th = add(li, 'div', 'pic-thumb');
+    if (it.preview) {
+      var img = add(th, 'img');
+      img.alt = 'รูปที่ ' + (i + 1) + (it.caption ? ': ' + captionClean(it.caption) : '');
+      img.addEventListener('error', function () { onPreviewError(it); });
+      img.src = it.preview;
+    } else {
+      add(th, 'span', '', it.status === 'working' ? 'กำลังเตรียมรูป' : 'แสดงตัวอย่างไม่ได้');
+    }
+    var main = add(li, 'div', 'pic-main');
+    var lbl = add(main, 'label', 'lbl', 'คำบรรยายรูปที่ ' + (i + 1) + ' (ไม่บังคับ)');
+    ui.input = add(main, 'input', 'input');
+    ui.input.type = 'text';
+    ui.input.id = 'picCap' + it.key;
+    ui.input.autocomplete = 'off';
+    ui.input.value = it.caption;
+    ui.input.disabled = it.status !== 'ready';
+    lbl.htmlFor = ui.input.id;
+    ui.counter = add(main, 'div', 'counter');
+    ui.input.setAttribute('aria-describedby', 'picCapC' + it.key);
+    ui.counter.id = 'picCapC' + it.key;
+    paintCapCounter(it);
+    ui.saved = add(main, 'span', 'pic-saved', '');
+    ui.saved.setAttribute('role', 'status');
+    ui.msg = add(main, 'p', 'note' + (it.status === 'error' ? ' err' : ''), it.msg);
+    if (it.status === 'error') ui.msg.setAttribute('role', 'alert');
+    ui.input.addEventListener('input', function () {
+      it.caption = ui.input.value;
+      paintCapCounter(it);
+      markField(ui.input, false);
+      ui.saved.textContent = '';
+    });
+    ui.input.addEventListener('change', function () { saveCaption(it); });
+    ui.input.addEventListener('keydown', function (e) { if (e.key === 'Enter') { e.preventDefault(); saveCaption(it); } });
+    var act = add(li, 'div', 'pic-actions');
+    var up = btn(act, 'เลื่อนขึ้น', 'alt small', function () { movePic(it, -1); }, 'up');
+    up.disabled = i === 0 || locked;
+    up.dataset.pic = 'mv:' + it.key + ':up';
+    up.setAttribute('aria-label', 'เลื่อนรูปที่ ' + (i + 1) + ' ขึ้น');
+    var dn = btn(act, 'เลื่อนลง', 'alt small', function () { movePic(it, 1); }, 'down');
+    dn.disabled = i === n - 1 || locked;
+    dn.dataset.pic = 'mv:' + it.key + ':down';
+    dn.setAttribute('aria-label', 'เลื่อนรูปที่ ' + (i + 1) + ' ลง');
+    var rm = btn(act, 'ลบรูป', 'danger small', function () { removePic(it); }, 'trash');
+    rm.disabled = it.status === 'working';
+    rm.setAttribute('aria-label', 'ลบรูปที่ ' + (i + 1));
+    rm.dataset.pic = 'rm:' + it.key;
+  }
+  function onPreviewError(it) {
+    var pics = state.pics;
+    if (!pics || !it.live || pics.articleId === null || pics.resigned) { it.preview = ''; renderPics(); return; }
+    pics.resigned = true;
+    api(imagesSignBody([pics.articleId])).then(function (data) {
+      var arts = data && Array.isArray(data.articles) ? data.articles : [];
+      arts.forEach(function (a) {
+        (a && Array.isArray(a.images) ? a.images : []).forEach(function (im) {
+          pics.items.forEach(function (x) {
+            if (x.live && String(x.imageId) === String(im.id) && !x.blobUrl) x.preview = picUrlOk(im.thumbUrl || im.url, SUPABASE_URL, ALLOW_LOCAL) ? (im.thumbUrl || im.url) : '';
+          });
+        });
+      });
+    }, function () { pics.items.forEach(function (x) { if (!x.blobUrl) x.preview = ''; }); }).then(function () {
+      if (state.pics === pics) renderPics();
+    });
+  }
+  function enqueue(pics, fn) {
+    var p = pics.queue.then(fn);
+    pics.queue = p.then(function () {}, function () {});
+    return p;
+  }
+
+  // ----- shrink and upload -----
+  var noopFn = function () {};
+  function bitmapViaImage(file) {
+    return new Promise(function (resolve, reject) {
+      var url = URL.createObjectURL(file);
+      var img = new Image();
+      img.onload = function () { URL.revokeObjectURL(url); resolve({ source: img, width: img.naturalWidth, height: img.naturalHeight, close: noopFn }); };
+      img.onerror = function () { URL.revokeObjectURL(url); reject(new Error('decode')); };
+      img.src = url;
+    });
+  }
+  function wrapBitmap(b) { return { source: b, width: b.width, height: b.height, close: function () { if (b.close) b.close(); } }; }
+  // Decode with the EXIF orientation applied where createImageBitmap supports it (same as manage.html).
+  function loadBitmap(file) {
+    if (typeof createImageBitmap !== 'function') return bitmapViaImage(file);
+    return createImageBitmap(file, { imageOrientation: 'from-image' }).then(wrapBitmap, function () {
+      return createImageBitmap(file).then(wrapBitmap, function () { return bitmapViaImage(file); });
+    });
+  }
+  function canvasBlob(canvas, quality) {
+    return new Promise(function (resolve, reject) {
+      canvas.toBlob(function (b) { if (b) resolve(b); else reject(new Error('encode')); }, 'image/jpeg', quality);
+    });
+  }
+  function drawScaled(source, sw, sh, max) {
+    var size = fitSize(sw, sh, max);
+    var canvas = document.createElement('canvas');
+    canvas.width = size.width;
+    canvas.height = size.height;
+    var ctx = canvas.getContext('2d');
+    ctx.fillStyle = 'white'; // JPEG has no alpha: PNG / WebP are painted on white first
+    ctx.fillRect(0, 0, size.width, size.height);
+    ctx.imageSmoothingQuality = 'high';
+    ctx.drawImage(source, 0, 0, size.width, size.height);
+    return canvas;
+  }
+  function shrinkFail(text) { var e = new Error('shrink'); e.text = text; return e; }
+  // File -> { main: Blob, thumb: Blob, width, height } (JPEG, EXIF dropped by re-encoding).
+  function shrinkPicture(file) {
+    return loadBitmap(file).then(function (bmp) {
+      var best = null;
+      function attempt(tried, bytes) {
+        var plan = shrinkPlan(bmp.width, bmp.height, bytes, tried);
+        if (plan.ok) return best;
+        if (plan.fail) throw shrinkFail(plan.text);
+        var canvas = drawScaled(bmp.source, bmp.width, bmp.height, plan.side);
+        return canvasBlob(canvas, plan.quality).then(function (blob) {
+          best = { main: blob, canvas: canvas };
+          return attempt(tried + 1, blob.size);
+        });
+      }
+      return Promise.resolve().then(function () { return attempt(0, null); }).then(function (res) {
+        var tp = thumbPlan(res.canvas.width, res.canvas.height);
+        var tc = drawScaled(res.canvas, res.canvas.width, res.canvas.height, tp.side);
+        return canvasBlob(tc, tp.quality).then(function (thumb) {
+          return { main: res.main, thumb: thumb, width: res.canvas.width, height: res.canvas.height };
+        });
+      }).then(function (r) { bmp.close(); return r; }, function (e) { bmp.close(); throw e; });
+    }, function () { throw shrinkFail(PIC_READ_FAIL_TEXT); });
+  }
+  function putBlob(url, blob) {
+    if (!isUploadUrlOk(url, SUPABASE_URL)) { var bad = new Error('upload url'); bad.putFail = true; return Promise.reject(bad); }
+    return fetch(url, { method: 'PUT', headers: { 'content-type': 'image/jpeg' }, body: blob, cache: 'no-store' }).then(function (resp) {
+      if (!resp.ok) { var e = new Error('put ' + resp.status); e.putFail = true; throw e; }
+    }, function () { var e2 = new Error('put network'); e2.putFail = true; throw e2; });
+  }
+  // Shrink, image.begin and the two PUTs for one picture. -> { imageId, width, height }
+  function uploadOnePicture(file) {
+    var res;
+    return shrinkPicture(file).then(function (r) {
+      res = r;
+      return api(imageBeginBody(1));
+    }).then(function (data) {
+      var slot = data && Array.isArray(data.uploads) ? data.uploads[0] : null;
+      if (!slot) { var e = new Error('slots'); e.status = 500; throw e; }
+      return putBlob(slot.uploadUrl, res.main).then(function () { return putBlob(slot.thumbUploadUrl, res.thumb); }).then(function () {
+        return { imageId: slot.imageId, width: res.width, height: res.height };
+      });
+    });
+  }
+
+  function addPictures(fileList) {
+    var pics = state.pics;
+    if (!pics || !state.edit || pics.imagesError) return;
+    var list = Array.prototype.slice.call(fileList || []);
+    var okFiles = [];
+    var notes = [];
+    list.forEach(function (f) {
+      var c = picSourceCheck(f);
+      if (c.ok) okFiles.push(f); else notes.push((f && f.name ? f.name + ': ' : '') + c.text);
+    });
+    var plan = canAddPictures(pics.items.length, okFiles.length);
+    if (plan.text) notes.push(plan.text);
+    okFiles = okFiles.slice(0, plan.allow);
+    picsNote(notes.join(' · '), notes.length ? 'warn' : '');
+    if (!okFiles.length) return;
+    var batch = okFiles.map(function (f) {
+      var it = newPicItem();
+      it.status = 'working'; it.msg = 'กำลังย่อรูป...'; it.file = f;
+      pics.items.push(it);
+      return it;
+    });
+    renderPics();
+    function paint() { if (state.pics === pics) renderPics(); }
+    eachSeq(batch, function (it) {
+      return shrinkPicture(it.file).then(function (res) {
+        it.res = res; it.width = res.width; it.height = res.height;
+        it.preview = URL.createObjectURL(res.thumb); it.blobUrl = true;
+        it.msg = 'กำลังอัปโหลด...';
+      }, function (e) {
+        it.status = 'error'; it.msg = e && e.text ? e.text : PIC_READ_FAIL_TEXT;
+      }).then(function () { it.file = null; paint(); });
+    }).then(function () {
+      var go = batch.filter(function (it) { return it.status === 'working'; });
+      if (!go.length) return null;
+      return api(imageBeginBody(go.length)).then(function (data) {
+        var slots = data && Array.isArray(data.uploads) ? data.uploads : [];
+        if (slots.length !== go.length) { var e = new Error('slots'); e.status = 500; throw e; }
+        return eachSeq(go, function (it, i) {
+          it.imageId = slots[i].imageId;
+          return putBlob(slots[i].uploadUrl, it.res.main).then(function () {
+            return putBlob(slots[i].thumbUploadUrl, it.res.thumb);
+          }).then(function () {
+            if (pics.articleId === null) return null;
+            return api(imageAttachBody(pics.articleId, it.imageId, '', it.width, it.height)).then(function () { it.live = true; });
+          }).then(function () {
+            it.status = 'ready'; it.msg = '';
+          }, function (e) {
+            it.status = 'error'; it.imageId = null;
+            it.msg = e && e.putFail ? PIC_UPLOAD_FAIL_TEXT : failText(e);
+          }).then(paint);
+        });
+      }, function (err) {
+        go.forEach(function (it) { it.status = 'error'; it.msg = failText(err); });
+      });
+    }).then(function () {
+      batch.forEach(function (it) { it.res = null; });
+      paint();
+      if (state.pics === pics) {
+        var failed = batch.filter(function (it) { return it.status === 'error'; }).length;
+        picsNote(failed ? 'แนบรูปไม่สำเร็จ ' + failed + ' รูป ลบรูปที่ขึ้นข้อความสีแดง แล้วลองใหม่' : (notes.length ? notes.join(' · ') : 'เพิ่มรูปแล้ว'), failed ? 'err' : (notes.length ? 'warn' : 'ok'));
+      }
+    });
+  }
+
+  function saveCaption(it) {
+    var pics = state.pics;
+    if (!pics || !it.live || pics.articleId === null || it.status !== 'ready') return;
+    var cap = captionClean(it.caption);
+    var over = captionError(it.caption);
+    if (over) { it.ui.saved.textContent = ''; setNote(it.ui.msg, over, 'err'); markField(it.ui.input, true); return; }
+    if (cap === it.savedCaption) return;
+    setNote(it.ui.msg, '', '');
+    enqueue(pics, function () { return api(imageUpdateBody(it.imageId, cap)); }).then(function () {
+      it.savedCaption = cap;
+      if (it.ui && state.pics === pics) {
+        it.ui.saved.textContent = 'บันทึกแล้ว';
+        clearTimeout(it.savedTimer);
+        it.savedTimer = setTimeout(function () { if (it.ui) it.ui.saved.textContent = ''; }, 3000);
+      }
+    }, function (err) {
+      if (!it.ui || state.pics !== pics) return;
+      markField(it.ui.input, true);
+      setNote(it.ui.msg, failText(err), 'err');
+    });
+  }
+  function movePic(it, dir) {
+    var pics = state.pics;
+    if (!pics || picsBusy() || pics.moving) return;
+    var before = pics.items;
+    var i = before.indexOf(it);
+    var after = moveItem(before, i, dir);
+    if (after.every(function (x, k) { return x === before[k]; })) return;
+    pics.items = after;
+    pics.moving = pics.articleId !== null;
+    renderPics('mv:' + it.key + (dir < 0 ? ':up' : ':down'));
+    if (pics.articleId === null) return;
+    var ids = after.filter(function (x) { return x.live; }).map(function (x) { return x.imageId; });
+    enqueue(pics, function () { return api(imageOrderBody(pics.articleId, ids)); }).then(function () {
+      pics.moving = false;
+      if (state.pics === pics) { picsNote('เรียงรูปใหม่แล้ว', 'ok'); renderPics('mv:' + it.key + (dir < 0 ? ':up' : ':down')); }
+    }, function (err) {
+      pics.moving = false;
+      pics.items = before;
+      if (state.pics === pics) { picsNote(failText(err), 'err'); renderPics('mv:' + it.key + (dir < 0 ? ':down' : ':up')); }
+    });
+  }
+  function removePic(it) {
+    var pics = state.pics;
+    if (!pics || it.status === 'working' || pics.moving) return;
+    var saved = it.live && pics.articleId !== null;
+    confirmBox('ลบรูปนี้?', removePicMessage(saved), 'ลบรูป', true).then(function (ok) {
+      if (!ok || state.pics !== pics) return;
+      function dropLocal() {
+        pics.items = pics.items.filter(function (x) { return x !== it; });
+        if (it.blobUrl && it.preview) { try { URL.revokeObjectURL(it.preview); } catch (e) { /* ignore */ } }
+        picsNote(saved ? 'ลบรูปแล้ว' : '', saved ? 'ok' : '');
+        renderPics();
+        if (!pe.add.disabled) pe.add.focus(); else pe.list.scrollIntoView();
+      }
+      if (!saved) { dropLocal(); return; }
+      enqueue(pics, function () { return api(imageRemoveBody(it.imageId)); }).then(function () {
+        if (state.pics === pics) dropLocal();
+      }, function (err) {
+        if (state.pics === pics) { picsNote(failText(err), 'err'); }
       });
     });
   }
@@ -1407,7 +1952,7 @@
       }).then(function (reply) {
         var r = normalizeDraftReply(reply);
         if (!r.drafts.length) failed.push({ name: name, text: PDF_EMPTY_TEXT });
-        else files.push({ name: name, mime: item.mime, kind: kind, pageCount: item.mime === 'application/pdf' ? r.pageCount : 0, costUsd: r.costUsd, drafts: r.drafts });
+        else files.push({ name: name, mime: item.mime, kind: kind, picture: item.mime !== 'application/pdf' ? item.file : null, picUrl: '', pageCount: item.mime === 'application/pdf' ? r.pageCount : 0, costUsd: r.costUsd, drafts: r.drafts });
         next();
       }, function (err) {
         var status = err && typeof err.status === 'number' ? err.status : 500;
@@ -1436,13 +1981,14 @@
   function paintDraftState(d) {
     var ui = d.ui;
     var editable = state.pdf && state.pdf.phase === 'review' && d.status !== 'saved';
-    [ui.sel, ui.title, ui.body, ui.tags].forEach(function (n) { n.disabled = !editable; });
+    [ui.sel, ui.title, ui.body, ui.tags, ui.attach, ui.caption].forEach(function (n) { if (n) n.disabled = !editable; });
     ui.card.className = 'draft' + (d.status === 'saved' ? ' saved' : d.status === 'failed' ? ' failed' : '');
     ui.stateTag.hidden = !(d.status === 'saved' || d.status === 'failed' || d.status === 'saving');
     ui.stateTag.className = 'tag ' + (d.status === 'saved' ? 'ok' : d.status === 'failed' ? 'err' : 'warn');
     ui.stateTag.textContent = d.status === 'saved' ? 'บันทึกแล้ว' : d.status === 'failed' ? 'ไม่สำเร็จ' : 'กำลังบันทึก...';
-    ui.errNote.textContent = d.status === 'failed' ? d.err : '';
-    ui.errNote.hidden = d.status !== 'failed';
+    ui.errNote.textContent = d.err || '';
+    ui.errNote.className = 'note ' + (d.status === 'failed' ? 'err' : 'warn');
+    ui.errNote.hidden = !d.err;
   }
   function refreshPdfButtons() {
     var pdf = state.pdf;
@@ -1503,6 +2049,33 @@
     ui.tags.setAttribute('aria-describedby', 'dTagsC' + i);
     ui.tagsCounter.id = 'dTagsC' + i;
 
+    if (d.picFile) {
+      var pb = add(card, 'div', 'draft-pic');
+      var pth = add(pb, 'div', 'pic-thumb');
+      if (d.picUrl) { var pimg = add(pth, 'img'); pimg.alt = 'รูปจากไฟล์ ' + d.fileName; pimg.src = d.picUrl; }
+      var pm = add(pb, 'div', 'pic-main');
+      var chkLbl = add(pm, 'label', 'pic-check');
+      ui.attach = add(chkLbl, 'input');
+      ui.attach.type = 'checkbox';
+      ui.attach.id = 'dAttach' + i;
+      ui.attach.checked = d.attachPic;
+      add(chkLbl, 'span', '', 'แนบรูปนี้กับบทความ');
+      add(pm, 'p', 'note', PIC_REMINDER);
+      var cl = add(pm, 'label', 'lbl', 'คำบรรยายรูป (ไม่บังคับ)');
+      ui.caption = add(pm, 'input', 'input');
+      ui.caption.type = 'text';
+      ui.caption.id = 'dCap' + i;
+      ui.caption.autocomplete = 'off';
+      ui.caption.value = d.caption;
+      cl.htmlFor = ui.caption.id;
+      ui.capCounter = add(pm, 'div', 'counter');
+      ui.caption.setAttribute('aria-describedby', 'dCapC' + i);
+      ui.capCounter.id = 'dCapC' + i;
+      var paintCap = function () { paintCounter(ui.capCounter, counterText(captionLength(d.caption), CAPTION_MAX), counterTone(captionLength(d.caption), CAPTION_MAX)); };
+      paintCap();
+      ui.attach.addEventListener('change', function () { d.attachPic = ui.attach.checked; ui.caption.disabled = !ui.attach.checked; });
+      ui.caption.addEventListener('input', function () { d.caption = ui.caption.value; paintCap(); markField(ui.caption, false); });
+    }
     add(card, 'p', 'src', sourceLine(d.pages, d.fileName));
     if (d.warning === 'secret') {
       var wb = add(card, 'div', 'warnbox');
@@ -1525,6 +2098,13 @@
   }
   function startPdfReview(files, kind, failedNote) {
     var drafts = flattenDrafts(files);
+    drafts.forEach(function (d) {
+      var fo = files[d.fileIdx];
+      if (fo && fo.picture) {
+        if (!fo.picUrl) { try { fo.picUrl = URL.createObjectURL(fo.picture); } catch (e) { fo.picUrl = ''; } }
+        d.picFile = fo.picture; d.picUrl = fo.picUrl; d.attachPic = true; d.caption = '';
+      }
+    });
     state.pdf = { files: files, kind: kind, drafts: drafts, phase: 'review' };
     state.tab = 'articles';
     clear(els.pdfCards);
@@ -1544,6 +2124,9 @@
   }
   function closePdf(refresh) {
     var counts = state.pdf ? queueCounts(state.pdf.drafts) : { saved: 0, failed: 0 };
+    if (state.pdf) {
+      state.pdf.files.forEach(function (fo) { if (fo.picUrl) { try { URL.revokeObjectURL(fo.picUrl); } catch (e) { /* ignore */ } } });
+    }
     state.pdf = null;
     renderTabs();
     els.pdfBtn.focus();
@@ -1572,12 +2155,12 @@
     var idx = 0;
     function finish() {
       state.busy = false;
-      pdf.phase = 'done';
       var c = queueCounts(pdf.drafts);
+      pdf.phase = c.failed > 0 ? 'review' : 'done';
       pdf.drafts.forEach(paintDraftState);
       refreshPdfButtons();
       setNote(els.pdfSaveNote, saveSummary(c.saved, c.failed), c.failed ? 'err' : 'ok');
-      if (state.pdf === pdf) els.pdfCancel.focus();
+      if (state.pdf === pdf) (c.failed > 0 ? els.pdfSave : els.pdfCancel).focus();
     }
     function next() {
       if (idx >= todo.length) { finish(); return; }
@@ -1594,14 +2177,34 @@
         Promise.resolve().then(next);
         return;
       }
-      api(articleCreateBody(chk.value, null)).then(function () {
-        d.status = 'saved';
-        d.err = '';
-      }, function (err) {
+      var withPic = !!d.picFile && d.attachPic;
+      var capErr = withPic ? captionError(d.caption) : '';
+      if (capErr) {
+        d.status = 'failed'; d.err = capErr; markField(d.ui.caption, true); paintDraftState(d);
+        Promise.resolve().then(next);
+        return;
+      }
+      var uploaded = withPic
+        ? uploadOnePicture(d.picFile).then(function (up) { up.caption = d.caption; return [up]; }, function (e) {
+          var ue = new Error('draft picture');
+          ue.picFail = true;
+          ue.text = e && e.text ? e.text : (e && e.putFail ? DRAFT_PIC_FAIL_TEXT : (e && typeof e.status === 'number' ? failText(e) : DRAFT_PIC_FAIL_TEXT));
+          throw ue;
+        })
+        : Promise.resolve(null);
+      uploaded.then(function (imgs) {
+        return api(articleCreateBody(chk.value, null, imgs)).then(function (data) {
+          d.status = 'saved';
+          d.err = imgs ? imagesAttachedText(imgs.length, data) : '';
+        });
+      }).then(null, function (err) {
         d.status = 'failed';
-        if (err && isSecretError(err.status, err.code)) {
+        if (err && err.picFail) {
+          d.err = err.text;
+        } else if (err && isSecretError(err.status, err.code)) {
           d.err = SECRET_TEXT;
-          markDraftFields(d, secretFields(d.title, d.body));
+          markDraftFields(d, secretFields(d.title, d.body, withPic ? [d.caption] : []));
+          if (withPic && looksSecret(d.caption)) markField(d.ui.caption, true);
         } else {
           d.err = failText(err);
         }
@@ -1617,7 +2220,7 @@
     if (!pdf || pdf.phase === 'saving') return;
     if (pdf.phase === 'done') { closePdf(true); return; }
     confirmBox('ทิ้งร่างบทความทั้งหมด?', PDF_DISCARD_TEXT, 'ทิ้งร่าง', true).then(function (ok) {
-      if (ok) closePdf(false);
+      if (ok) closePdf(queueCounts(pdf.drafts).saved > 0);
     });
   }
 
@@ -1803,6 +2406,21 @@
   els.editorU.addEventListener('keydown', function (e) { if (e.key === 'Enter') { e.preventDefault(); addEditor(); } });
   [els.fTitle, els.fBody, els.fTags].forEach(function (n) {
     n.addEventListener('input', function () { updateCounters(); markField(n, false); if (!els.fTitle.classList.contains('bad') && !els.fBody.classList.contains('bad')) { els.secretBox.hidden = true; } });
+  });
+  pe.add.insertBefore((function () { var ic = icon('image'); ic.setAttribute('class', 'ic'); return ic; })(), pe.add.firstChild);
+  pe.add.addEventListener('click', function () { if (state.pics && !pe.add.disabled) pe.file.click(); });
+  pe.file.addEventListener('change', function () {
+    var picked = pe.file.files ? Array.prototype.slice.call(pe.file.files) : [];
+    pe.file.value = '';
+    addPictures(picked);
+  });
+  els.editorPanel.addEventListener('paste', function (e) {
+    var items = e.clipboardData && e.clipboardData.items ? e.clipboardData.items : [];
+    var files = [];
+    for (var i = 0; i < items.length; i++) {
+      if (items[i].kind === 'file' && /^image[/]/.test(items[i].type)) { var f = items[i].getAsFile(); if (f) files.push(f); }
+    }
+    if (files.length && state.pics) { e.preventDefault(); addPictures(files); }
   });
   els.fSave.addEventListener('click', saveArticle);
   els.fCancel.addEventListener('click', function () {

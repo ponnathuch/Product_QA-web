@@ -202,6 +202,45 @@
   #panelList { display: flex; flex-direction: column; gap: var(--space-3); }
   #panelStatus { color: var(--c-ink-3); font-size: var(--fs-s); }
 
+  /* ---------- article pictures ---------- */
+  .pics { margin-top: var(--space-3); display: flex; flex-direction: column; gap: var(--space-3); }
+  .pic-group-title { margin: 0 0 var(--space-1); font-size: var(--fs-s); font-weight: bold; color: var(--c-ink-2); }
+  .pic-row { display: flex; flex-wrap: wrap; gap: var(--space-2); }
+  .kb-pic {
+    display: flex; flex-direction: column; align-items: stretch; gap: var(--space-1); width: var(--size-tile); padding: var(--space-1);
+    border: 1px solid var(--c-line); border-radius: var(--radius-m); background: var(--c-surface-2); color: var(--c-ink);
+    text-align: left; cursor: pointer; font-size: var(--fs-xs);
+  }
+  .kb-pic:hover { border-color: var(--c-brand); background: var(--c-brand-soft); }
+  .kb-pic img { width: var(--size-thumb); height: var(--size-thumb); align-self: center; object-fit: contain; border-radius: var(--radius-s); background: var(--c-img-backing); }
+  .kb-pic .pic-k { font-weight: bold; color: var(--c-brand-strong); }
+  .kb-pic .pic-cap { display: -webkit-box; -webkit-line-clamp: 2; line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; color: var(--c-ink-2); word-break: break-word; }
+  .pic-fail { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-2); font-size: var(--fs-s); color: var(--c-err); }
+  .oq-art .pics { margin-top: var(--space-2); }
+  @media (prefers-color-scheme: dark) {
+    .kb-pic, #picView { --c-img-backing: var(--c-surface-2); }
+  }
+
+  #picView {
+    padding: 0; width: min(96vw, var(--max-wide)); max-width: 96vw; max-height: 96vh; overflow: auto;
+    border: 1px solid var(--c-line-strong); border-radius: var(--radius-l); background: var(--c-surface); color: var(--c-ink);
+  }
+  #picView::backdrop { background: var(--c-scrim); }
+  .pv-in { display: flex; flex-direction: column; gap: var(--space-3); padding: var(--space-3) var(--space-4) var(--space-4); }
+  .pv-count { font-weight: bold; color: var(--c-ink-2); }
+  .pv-stage {
+    position: relative; display: flex; align-items: center; justify-content: center; min-height: calc(var(--size-empty) * 2);
+    border: 1px solid var(--c-line); border-radius: var(--radius-m); background: var(--c-img-backing); touch-action: pinch-zoom;
+  }
+  .pv-stage img { display: block; max-width: 100%; max-height: 80vh; object-fit: contain; touch-action: pinch-zoom; }
+  .pv-stage.loading img, .pv-stage.failed img { visibility: hidden; position: absolute; }
+  .pv-load { position: absolute; color: var(--c-ink-3); font-size: var(--fs-s); }
+  .pv-stage:not(.loading) .pv-load { display: none; }
+  .pv-cap { margin: 0; white-space: pre-wrap; word-break: break-word; }
+  .pv-nav { display: flex; flex-wrap: wrap; gap: var(--space-2); justify-content: space-between; }
+  .pv-btn { min-height: var(--size-target-lg); min-width: var(--size-target-lg); gap: var(--space-1); }
+  .pv-btn svg { width: var(--size-icon); height: var(--size-icon); }
+
   @media (max-width: 520px) {
     .top { padding: var(--space-2) var(--space-3); }
     .top-inner { flex-wrap: wrap; gap: var(--space-2); }
@@ -270,6 +309,23 @@
   <div id="panelBody"><div id="panelStatus" role="status"></div><div id="panelList"></div></div>
 </aside>
 </div>
+
+<dialog id="picView" aria-labelledby="pvCount">
+  <div class="pv-in">
+    <div class="pv-count" id="pvCount" aria-live="polite"></div>
+    <div class="pv-stage loading" id="pvStage">
+      <img id="pvImg" alt="" referrerpolicy="no-referrer" decoding="async">
+      <div class="pv-load" id="pvLoad" role="status">กำลังโหลดรูป...</div>
+    </div>
+    <div class="pic-fail" id="pvFail" role="alert" hidden></div>
+    <p class="pv-cap" id="pvCap"></p>
+    <div class="pv-nav">
+      <button type="button" id="pvPrev" class="btn alt pv-btn"><span>ก่อนหน้า</span></button>
+      <button type="button" id="pvNext" class="btn alt pv-btn"><span>ถัดไป</span></button>
+      <button type="button" id="pvClose" class="btn pv-btn"><span>ปิด</span></button>
+    </div>
+  </div>
+</dialog>
 
 <script>
 /* Feature check: plain ES5 on purpose, so an old browser reaches it. */
@@ -644,7 +700,7 @@
 
   // ---- reply -> bubble view-model ----
   // kinds: 'product' | 'it'. For 'it', variant: 'answer' | 'no_article' | 'budget' | 'provider_error' | 'empty'.
-  function replyView(data, baseUrl) {
+  function replyView(data, baseUrl, allowData) {
     var d = data && typeof data === 'object' ? data : {};
     var topic = d.topic === 'it' ? 'it' : 'product';
     var source = d.topicSource === 'chosen' ? 'chosen' : 'auto';
@@ -690,6 +746,7 @@
       variant = 'empty'; text = PROVIDER_TEXT;
     }
     base.variant = variant;
+    base.pics = variant === 'answer' ? picViews(d, baseUrl, allowData) : picViews({}, baseUrl, allowData);
     base.lines = answerLines(text);
     base.sources = variant === 'answer' ? sources : [];
     base.openQuestionId = variant === 'no_article' ? openId : null;
@@ -698,6 +755,100 @@
     base.retry = variant === 'not_sent';
     base.historyText = variant === 'answer' || variant === 'no_article' ? text : '';
     return base;
+  }
+
+  // ---- article pictures ----
+  var PIC_URL_PATH = '/storage/v1/object/sign/kb-images/';
+  var PIC_FAIL_TEXT = 'โหลดภาพประกอบไม่ได้';
+  var PIC_RETRY_TEXT = 'ลองอีกครั้ง';
+  var PIC_SIGN_MAX = 5;
+  var PIC_PER_ARTICLE = 4;
+  // Signed Storage URL of this project's kb-images bucket. Inline data: pictures are allowed only for the dev mock.
+  function kbImageUrlOk(url, baseUrl, allowData) {
+    if (typeof url !== 'string' || !url) return false;
+    if (typeof baseUrl === 'string' && baseUrl && url.indexOf(baseUrl + PIC_URL_PATH) === 0) return true;
+    return allowData === true && /^data:image[/]/i.test(url);
+  }
+  function picCaption(v) { return typeof v === 'string' ? v.replace(/\s+/g, ' ').trim() : ''; }
+  function posInt(v) { return typeof v === 'number' && isFinite(v) && v >= 1 && Math.floor(v) === v ? v : 0; }
+  function picAlt(pic, k, title) {
+    var c = picCaption(pic && pic.caption);
+    return c ? c : 'ภาพประกอบ ' + k + ' จากบทความ ' + (title || '');
+  }
+  function picLabel(pic, k, title) {
+    var c = picCaption(pic && pic.caption);
+    return 'เปิดภาพ ' + k + ': ' + (c ? c : (title || ''));
+  }
+  function lightboxCountText(k, n) { return 'ภาพ ' + k + ' / ' + n; }
+  // articles: [{ id, title, images: [{ id, caption, width, height, url, thumbUrl }] }] -> groups with the pictures worth showing.
+  function picGroups(articles, baseUrl, allowData) {
+    var groups = [];
+    (Array.isArray(articles) ? articles : []).forEach(function (a) {
+      if (!a || typeof a.title !== 'string' || !a.title || !Array.isArray(a.images)) return;
+      var pics = [];
+      a.images.forEach(function (im) {
+        if (!im || pics.length >= PIC_PER_ARTICLE) return;
+        if (!kbImageUrlOk(im.url, baseUrl, allowData)) return;
+        var k = pics.length + 1;
+        pics.push({
+          id: im.id, k: k, caption: picCaption(im.caption), width: posInt(im.width), height: posInt(im.height),
+          url: im.url, thumbUrl: kbImageUrlOk(im.thumbUrl, baseUrl, allowData) ? im.thumbUrl : im.url,
+          alt: picAlt(im, k, a.title), label: picLabel(im, k, a.title), hidden: false
+        });
+      });
+      if (pics.length) groups.push({ articleId: a.id, title: a.title, pics: pics });
+    });
+    return groups;
+  }
+  // d: the IT reply. -> { articles: [{ id, title }], groups, showHeadings, expiresAt, error }
+  function picViews(d, baseUrl, allowData) {
+    var src = d && typeof d === 'object' ? d : {};
+    var list = (Array.isArray(src.articles) ? src.articles : []).filter(function (a) { return a && typeof a.title === 'string' && a.title; });
+    var groups = picGroups(list, baseUrl, allowData);
+    return {
+      articles: list.map(function (a) { return { id: a.id, title: a.title }; }),
+      groups: groups, showHeadings: groups.length > 1,
+      expiresAt: typeof src.imagesExpireAt === 'string' && src.imagesExpireAt ? src.imagesExpireAt : null,
+      error: src.imagesError === true
+    };
+  }
+  // Which article ids to ask images.sign for: articles that have pictures first, then the rest, at most 5.
+  function signIds(articles, groups) {
+    var out = [];
+    function put(id) {
+      if ((typeof id === 'number' && isFinite(id)) || (typeof id === 'string' && id)) { if (out.indexOf(id) === -1) out.push(id); }
+    }
+    (Array.isArray(groups) ? groups : []).forEach(function (g) { put(g.articleId); });
+    (Array.isArray(articles) ? articles : []).forEach(function (a) { put(a && a.id); });
+    return out.slice(0, PIC_SIGN_MAX);
+  }
+  function picSignBody(articles, groups) { return buildKbBody('images.sign', { articleIds: signIds(articles, groups) }); }
+  // images.sign reply -> { groups, expiresAt } or null when the reply has no usable shape.
+  function picsFromSign(articles, data, baseUrl, allowData) {
+    if (!data || typeof data !== 'object' || !Array.isArray(data.articles)) return null;
+    var titles = {};
+    (Array.isArray(articles) ? articles : []).forEach(function (a) { if (a) titles[String(a.id)] = a.title; });
+    var merged = data.articles.map(function (a) {
+      return { id: a && a.id, title: a ? titles[String(a.id)] : '', images: a && Array.isArray(a.images) ? a.images : [] };
+    });
+    return {
+      groups: picGroups(merged, baseUrl, allowData),
+      expiresAt: typeof data.expiresAt === 'string' && data.expiresAt ? data.expiresAt : null
+    };
+  }
+  function imagesExpired(iso, now) {
+    if (typeof iso !== 'string' || !iso) return false;
+    var ms = Date.parse(iso);
+    return !isNaN(ms) && ms <= now;
+  }
+  // Keyboard in the lightbox: new index for a key (stays inside 0..n-1).
+  function lightboxNext(key, i, n) {
+    var last = Math.max(0, n - 1);
+    if (key === 'ArrowLeft') return Math.max(0, i - 1);
+    if (key === 'ArrowRight') return Math.min(last, i + 1);
+    if (key === 'Home') return 0;
+    if (key === 'End') return last;
+    return i;
   }
 
   // ---- Open Questions ----
@@ -711,7 +862,7 @@
     if (status === 'dismissed') return 'mute';
     return 'warn';
   }
-  function openRowView(row) {
+  function openRowView(row, baseUrl, allowData) {
     var r = row && typeof row === 'object' ? row : {};
     var art = r.status === 'answered' && r.article && typeof r.article === 'object' ? r.article : null;
     return {
@@ -722,6 +873,7 @@
       askedText: thaiDateTime(r.askedAt),
       articleTitle: art ? String(art.title || '') : '',
       articleLines: art ? answerLines(art.body) : [],
+      articlePics: art ? picViews({ articles: [{ id: art.id, title: art.title, images: art.images }] }, baseUrl, allowData) : null,
       articleGone: !art && r.status === 'answered' && r.articleDeleted === true ? ARTICLE_GONE_TEXT : ''
     };
   }
@@ -736,6 +888,8 @@
     send: [['path', 'M22 2L11 13'], ['path', 'M22 2l-7 20-4-9-9-4z']],
     close: [['path', 'M18 6L6 18'], ['path', 'M6 6l12 12']],
     chevronD: [['path', 'M6 9l6 6 6-6']],
+    chevronL: [['path', 'M15 18l-6-6 6-6']],
+    chevronR: [['path', 'M9 18l6-6-6-6']],
     thumbUp: [['path', 'M7 10v12'], ['path', 'M15 5.88 14 10h5.83a2 2 0 0 1 1.92 2.56l-2.33 8A2 2 0 0 1 17.5 22H4a2 2 0 0 1-2-2v-8a2 2 0 0 1 2-2h2.76a2 2 0 0 0 1.79-1.11L12 2a3.13 3.13 0 0 1 3 3.88Z']],
     thumbDown: [['path', 'M17 14V2'], ['path', 'M9 18.12 10 14H4.17a2 2 0 0 1-1.92-2.56l2.33-8A2 2 0 0 1 6.5 2H20a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2h-2.76a2 2 0 0 0-1.79 1.11L12 22a3.13 3.13 0 0 1-3-3.88Z']]
   };
@@ -768,7 +922,9 @@
     app: $('app'), notice: $('notice'), msg: $('msg'), who: $('who'), mineBtn: $('mineBtn'), kbLink: $('kbLink'),
     thread: $('thread'), threadIn: $('threadIn'), composer: $('composer'), thumbs: $('thumbs'), q: $('q'),
     send: $('sendBtn'), hint: $('hint'), cam: $('camBtn'), gal: $('galBtn'), camInput: $('camInput'), galInput: $('galInput'),
-    panel: $('panel'), panelClose: $('panelClose'), panelRefresh: $('panelRefresh'), panelStatus: $('panelStatus'), panelList: $('panelList')
+    panel: $('panel'), panelClose: $('panelClose'), panelRefresh: $('panelRefresh'), panelStatus: $('panelStatus'), panelList: $('panelList'),
+    pv: $('picView'), pvCount: $('pvCount'), pvStage: $('pvStage'), pvImg: $('pvImg'), pvFail: $('pvFail'), pvCap: $('pvCap'),
+    pvPrev: $('pvPrev'), pvNext: $('pvNext'), pvClose: $('pvClose')
   };
   var HINT_DEFAULT = els.hint.innerHTML;
 
@@ -778,6 +934,8 @@
   var shrinking = 0;       // pictures still being shrunk
   var busy = false;
   var nextTurnId = 1;
+  var ALLOW_DATA = false; // inline data: pictures only for the dev mock (?mockrole=...)
+  try { ALLOW_DATA = new URLSearchParams(window.location.search).get('mockrole') !== null; } catch (e) { ALLOW_DATA = false; }
 
   function addText(parent, tag, cls, text) {
     var el = document.createElement(tag);
@@ -945,6 +1103,208 @@
     return row;
   }
 
+  // ---------- article pictures ----------
+  var picSeq = 0;
+  function newPicModel(pv) {
+    picSeq += 1;
+    return { key: 'pm' + picSeq, src: pv, articles: pv.articles, groups: pv.groups, showHeadings: pv.showHeadings, expiresAt: pv.expiresAt, failed: pv.error, signing: null, retried: {}, version: 0, rendered: 0, host: null };
+  }
+  // One images.sign call per model at a time; replaces the groups (fresh URLs) on success.
+  function signModel(model) {
+    if (model.signing) return model.signing;
+    if (!current) return Promise.resolve(false);
+    model.signing = postJson('/functions/v1/kb', picSignBody(model.articles, model.groups), sessionHeaders()).then(function (r) {
+      model.signing = null;
+      if (r.status !== 200) return false;
+      var res = picsFromSign(model.articles, r.data, SUPABASE_URL, ALLOW_DATA);
+      if (!res) return false;
+      model.groups = res.groups;
+      model.showHeadings = res.groups.length > 1;
+      model.expiresAt = res.expiresAt;
+      model.version += 1;
+      return true;
+    });
+    return model.signing;
+  }
+  function renderPicBlockOnce(model) {
+    if (model.rendered === model.version) return;
+    model.rendered = model.version;
+    renderPicBlock(model);
+  }
+  function picFailed(model, pic) {
+    var id = String(pic.id);
+    if (model.retried[id]) { pic.hidden = true; model.failed = true; renderPicBlock(model); return; }
+    model.retried[id] = true;
+    signModel(model).then(function (ok) {
+      if (ok) { renderPicBlockOnce(model); return; }
+      pic.hidden = true; model.failed = true; renderPicBlock(model);
+    });
+  }
+  function retryPics(model) {
+    model.failed = false;
+    model.groups.forEach(function (g) { g.pics.forEach(function (p) { p.hidden = false; }); });
+    signModel(model).then(function (ok) {
+      if (ok) {
+        model.groups.forEach(function (g) { g.pics.forEach(function (p) { model.retried[String(p.id)] = true; }); });
+        model.version += 1; model.rendered = model.version;
+      } else {
+        model.failed = true;
+      }
+      renderPicBlock(model);
+    });
+  }
+  function picFailNote(parent, model) {
+    var box = addText(parent, 'div', 'pic-fail', '');
+    box.setAttribute('role', 'alert');
+    addText(box, 'span', '', PIC_FAIL_TEXT);
+    var b = addText(box, 'button', 'btn alt small', PIC_RETRY_TEXT);
+    b.type = 'button';
+    b.addEventListener('click', function () { b.disabled = true; retryPics(model); });
+    return box;
+  }
+  function renderPicBlock(model) {
+    var host = model.host;
+    if (!host) return;
+    host.textContent = '';
+    model.groups.forEach(function (g, gi) {
+      var wrap = addText(host, 'div', 'pic-group', '');
+      if (model.showHeadings) addText(wrap, 'p', 'pic-group-title', 'ภาพประกอบ: ' + g.title);
+      var row = addText(wrap, 'div', 'pic-row', '');
+      g.pics.forEach(function (pic, pi) {
+        if (pic.hidden) return;
+        var b = addText(row, 'button', 'kb-pic', '');
+        b.type = 'button';
+        b.setAttribute('aria-label', pic.label);
+        b.dataset.picKey = model.key + ':' + String(g.articleId) + ':' + String(pic.id);
+        var img = document.createElement('img');
+        img.alt = pic.alt;
+        if (pic.width && pic.height) { img.width = pic.width; img.height = pic.height; }
+        img.loading = 'lazy';
+        img.decoding = 'async';
+        img.setAttribute('referrerpolicy', 'no-referrer');
+        img.addEventListener('error', function () { picFailed(model, pic); });
+        img.src = pic.thumbUrl;
+        b.appendChild(img);
+        addText(b, 'span', 'pic-k', 'ภาพ ' + pic.k);
+        if (pic.caption) addText(b, 'span', 'pic-cap', pic.caption);
+        b.addEventListener('click', function () { openLightbox(model, gi, pi, b); });
+      });
+    });
+    if (model.failed) picFailNote(host, model);
+  }
+  function makePicHost(parent, pv) {
+    if (!pv || (!pv.groups.length && !pv.error)) return null;
+    var model = newPicModel(pv);
+    model.host = addText(parent, 'div', 'pics', '');
+    renderPicBlock(model);
+    return model;
+  }
+
+  // ----- lightbox -----
+  var lb = { model: null, gi: 0, pi: 0, opener: null, retried: {}, token: 0, first: false };
+  function lbPic() {
+    var g = lb.model && lb.model.groups[lb.gi];
+    return g ? g.pics[lb.pi] || null : null;
+  }
+  function lbFailBox(show) {
+    els.pvFail.textContent = '';
+    els.pvFail.hidden = !show;
+    els.pvStage.className = 'pv-stage' + (show ? ' failed' : ' loading');
+    if (!show) return;
+    addText(els.pvFail, 'span', '', PIC_FAIL_TEXT);
+    var b = addText(els.pvFail, 'button', 'btn alt small', PIC_RETRY_TEXT);
+    b.type = 'button';
+    b.addEventListener('click', function () {
+      var p = lbPic();
+      if (p) lb.retried[String(p.id)] = false;
+      lbFailBox(false);
+      lbReload(true);
+    });
+  }
+  function lbShow() {
+    var pic = lbPic();
+    var g = lb.model.groups[lb.gi];
+    if (!pic) { lbFailBox(true); return; }
+    els.pvCount.textContent = lightboxCountText(pic.k, g.pics.length) + (lb.model.showHeadings ? ' · ' + g.title : '');
+    els.pvCap.textContent = pic.caption;
+    els.pvCap.hidden = !pic.caption;
+    els.pvPrev.disabled = lb.pi <= 0;
+    els.pvNext.disabled = lb.pi >= g.pics.length - 1;
+    lbFailBox(false);
+    els.pvImg.alt = pic.alt;
+    els.pvImg.src = pic.url;
+    if (lb.first) { lb.first = false; (els.pvNext.disabled ? els.pvClose : els.pvNext).focus(); }
+    else if (!els.pv.contains(document.activeElement) || document.activeElement.disabled) els.pvClose.focus();
+  }
+  // forceSign: ask for fresh URLs first.
+  function lbReload(forceSign) {
+    var model = lb.model;
+    var pic = lbPic();
+    if (!pic) { lbFailBox(true); return; }
+    var articleId = model.groups[lb.gi].articleId;
+    var picId = pic.id;
+    var token = ++lb.token;
+    var needSign = forceSign || imagesExpired(model.expiresAt, Date.now());
+    if (!needSign) { lbShow(); return; }
+    els.pvStage.className = 'pv-stage loading';
+    signModel(model).then(function (ok) {
+      if (token !== lb.token) return;
+      if (!ok) { lbFailBox(true); return; }
+      model.rendered = model.version;
+      renderPicBlock(model);
+      var found = false;
+      model.groups.forEach(function (g, gi) {
+        if (String(g.articleId) !== String(articleId)) return;
+        g.pics.forEach(function (p, pi) { if (String(p.id) === String(picId)) { lb.gi = gi; lb.pi = pi; found = true; } });
+      });
+      if (!found) { lbFailBox(true); return; }
+      lbShow();
+    });
+  }
+  function openLightbox(model, gi, pi, opener) {
+    lb.model = model; lb.gi = gi; lb.pi = pi; lb.opener = opener; lb.retried = {}; lb.first = true;
+    if (typeof els.pv.showModal === 'function') els.pv.showModal(); else els.pv.setAttribute('open', '');
+    lbReload(false);
+  }
+  function lbGo(i) {
+    var g = lb.model && lb.model.groups[lb.gi];
+    if (!g || i === lb.pi) return;
+    lb.pi = i;
+    lbReload(false);
+  }
+  els.pvImg.addEventListener('load', function () { els.pvStage.className = 'pv-stage'; });
+  els.pvImg.addEventListener('error', function () {
+    var pic = lbPic();
+    if (!pic || !els.pv.open) return;
+    var id = String(pic.id);
+    if (lb.retried[id]) { lbFailBox(true); return; }
+    lb.retried[id] = true;
+    lbReload(true);
+  });
+  els.pvPrev.insertBefore(icon('chevronL'), els.pvPrev.firstChild);
+  els.pvNext.appendChild(icon('chevronR'));
+  els.pvClose.insertBefore(icon('close'), els.pvClose.firstChild);
+  els.pvPrev.addEventListener('click', function () { lbGo(lb.pi - 1); });
+  els.pvNext.addEventListener('click', function () { lbGo(lb.pi + 1); });
+  els.pvClose.addEventListener('click', function () { els.pv.close(); });
+  els.pv.addEventListener('keydown', function (ev) {
+    if (['ArrowLeft', 'ArrowRight', 'Home', 'End'].indexOf(ev.key) === -1) return;
+    ev.preventDefault();
+    var g = lb.model && lb.model.groups[lb.gi];
+    if (g) lbGo(lightboxNext(ev.key, lb.pi, g.pics.length));
+  });
+  els.pv.addEventListener('click', function (ev) { if (ev.target === els.pv) els.pv.close(); });
+  els.pv.addEventListener('close', function () {
+    lb.token++;
+    els.pvImg.removeAttribute('src');
+    var op = lb.opener;
+    if (op && !document.contains(op) && lb.model) {
+      var pic = lbPic();
+      if (pic) op = document.querySelector('[data-pic-key="' + lb.model.key + ':' + String(lb.model.groups[lb.gi].articleId) + ':' + String(pic.id) + '"]');
+    }
+    if (op && op.focus) op.focus();
+  });
+
   function makeCard(c) {
     var card = document.createElement('div');
     card.className = 'card';
@@ -1076,6 +1436,10 @@
     if (v.lines.length) addLines(bub, v.lines);
     if (v.note) addText(bub, 'div', 'answer-note', v.note);
     if (v.kind === 'it' && v.redacted) addText(bub, 'div', 'answer-note', REDACTED_TEXT);
+    if (v.kind === 'it' && v.pics) {
+      if (!turn.picModel || turn.picModel.src !== v.pics) turn.picModel = makePicHost(bub, v.pics);
+      else { turn.picModel.host = addText(bub, 'div', 'pics', ''); renderPicBlock(turn.picModel); }
+    }
     if (v.kind === 'it' && v.sources && v.sources.length) {
       var src = addText(bub, 'div', 'src', '');
       addText(src, 'b', '', 'แหล่งข้อมูล');
@@ -1216,7 +1580,8 @@
     clearTimeout(slowTimer);
     turn.slow = false;
     if (r.status === 200 && r.data && (r.data.topic === 'product' || r.data.topic === 'it')) {
-      turn.view = replyView(r.data, SUPABASE_URL);
+      turn.view = replyView(r.data, SUPABASE_URL, ALLOW_DATA);
+      turn.picModel = null;
       turn.reply = turn.view.historyText ? { text: turn.view.historyText, topic: turn.view.topic } : null;
       turn.state = 'done';
       turn.error = '';
@@ -1386,6 +1751,7 @@
   });
   document.addEventListener('keydown', function (ev) {
     if (ev.key !== 'Escape') return;
+    if (els.pv.open) return;
     if (openMenu) { var b = openMenu.btn; closeMenu(); b.focus(); return; }
     if (!els.panel.hidden) closePanel();
   });
@@ -1402,7 +1768,7 @@
     if (r.status !== 200 || !r.data || !Array.isArray(r.data.rows)) { els.panelStatus.textContent = 'โหลดรายการไม่สำเร็จ ลองรีเฟรชอีกครั้ง'; return; }
     els.panelStatus.textContent = r.data.rows.length ? '' : 'ยังไม่มีคำถามที่ส่งถึงทีมไอที';
     r.data.rows.forEach(function (row) {
-      var v = openRowView(row);
+      var v = openRowView(row, SUPABASE_URL, ALLOW_DATA);
       var card = addText(els.panelList, 'div', 'oq', '');
       addText(card, 'p', 'oq-q', v.question);
       var meta = addText(card, 'div', 'oq-meta', '');
@@ -1413,6 +1779,7 @@
         var art = addText(card, 'div', 'oq-art', '');
         if (v.articleTitle) addText(art, 'b', '', v.articleTitle);
         addLines(art, v.articleLines);
+        if (v.articlePics) makePicHost(art, v.articlePics);
       }
     });
   }

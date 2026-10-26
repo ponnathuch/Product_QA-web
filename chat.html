@@ -198,6 +198,7 @@
   .oq-art { margin-top: var(--space-2); padding: var(--space-2) var(--space-3); background: var(--c-surface-2); border-radius: var(--radius-s); font-size: var(--fs-s); }
   .oq-art b { display: block; color: var(--c-ink); }
   .oq-art p { margin: var(--space-1) 0 0; }
+  .oq-gone { margin: var(--space-2) 0 0; font-size: var(--fs-s); color: var(--c-ink-3); }
   #panelList { display: flex; flex-direction: column; gap: var(--space-3); }
   #panelStatus { color: var(--c-ink-3); font-size: var(--fs-s); }
 
@@ -311,7 +312,8 @@
   if (!window.__pqaChatOk) return;
   var SUPABASE_URL = 'https://zuyqwkjvjuwykrdhzhwq.supabase.co';
   var TIMEOUT_MS = 15000;
-  var ASK_TIMEOUT_MS = 60000;
+  var ASK_TIMEOUT_MS = 100000; // the server may need about 95 s for 3 pictures
+  var SLOW_WAIT_MS = 30000;
   var STORE_KEY = 'pqa.session';
   var SVG_NS = 'http://www.w3.org/2000/svg';
 
@@ -326,6 +328,11 @@
   var MAX_IMAGE_BYTES = 700 * 1024;
   var TOPICS = ['auto', 'product', 'it'];
   var NO_ARTICLE_TEXT = 'ยังไม่มีคำตอบในฐานความรู้ IT ส่งเรื่องนี้ให้ทีมไอทีแล้ว ดูสถานะได้ที่ "คำถามของฉัน"';
+  var NOT_SENT_TEXT = 'ยังไม่มีคำตอบ และยังไม่ได้ส่งเรื่องให้ทีมไอที ลองส่งใหม่อีกครั้ง';
+  var REDACTED_TEXT = 'ระบบซ่อนข้อมูลที่เหมือนรหัสผ่านในข้อความของคุณแล้ว';
+  var SLOW_TEXT = 'กำลังอ่านรูป อาจใช้เวลาถึง 1-2 นาที';
+  var ARTICLE_GONE_TEXT = 'บทความถูกนำออกแล้ว ถามใหม่ได้';
+  var KEEP_PREVIEW_TURNS = 6;
   var BUDGET_TEXT = 'วันนี้งบ AI ของหัวข้อ IT ถูกใช้หมดแล้ว ลองใหม่พรุ่งนี้ หรือติดต่อทีมไอทีโดยตรง';
   var PROVIDER_TEXT = 'ระบบตอบไม่ได้ในขณะนี้ ลองถามอีกครั้ง';
   var NOT_IN_CATALOG_TEXT = 'ไม่พบในเอกสารสินค้า ลองพิมพ์คำอื่น หรือใช้รหัสสินค้า 7 หลัก';
@@ -462,7 +469,8 @@
     if (pt) {
       body.pictureText = pt.length > MAX_PICTURE_TEXT ? pt.slice(0, MAX_PICTURE_TEXT) : pt;
     } else if (topic !== 'product' && turn && Array.isArray(turn.images) && turn.images.length) {
-      body.images = turn.images.slice(0, MAX_IMAGES).map(function (im) { return { mime: 'image/jpeg', data: im.data }; });
+      body.images = turn.images.filter(function (im) { return im && im.data; }).slice(0, MAX_IMAGES).map(function (im) { return { mime: 'image/jpeg', data: im.data }; });
+      if (!body.images.length) delete body.images;
     }
     return body;
   }
@@ -606,6 +614,34 @@
     };
   }
 
+  // ---- picture memory ----
+  // After a 200 reply that carries pictureText: keep the text on the turn, drop the base64, keep a small thumbnail.
+  // A re-ask (topic change) then sends pictureText and pays no second vision call.
+  function compactTurnImages(turn, pictureText) {
+    var pt = typeof pictureText === 'string' ? pictureText.trim() : '';
+    if (!turn || !pt) return false;
+    turn.pictureText = pt;
+    turn.images = (Array.isArray(turn.images) ? turn.images : []).map(function (im) {
+      return { thumb: im && typeof im.thumb === 'string' ? im.thumb : '' };
+    });
+    return true;
+  }
+  // Drops the previews of every turn older than the last "keep" turns (blob URLs are revoked).
+  function pruneOldPreviews(turnList, keep, revoke) {
+    var cut = turnList.length - keep;
+    for (var i = 0; i < cut; i++) {
+      var imgs = turnList[i] && turnList[i].images;
+      if (!Array.isArray(imgs)) continue;
+      imgs.forEach(function (im) {
+        [im.preview, im.thumb].forEach(function (u) {
+          if (typeof u === 'string' && u.indexOf('blob:') === 0 && revoke) revoke(u);
+        });
+        im.preview = ''; im.thumb = '';
+      });
+    }
+  }
+  function waitText(slow) { return slow ? SLOW_TEXT : 'กำลังหา...'; }
+
   // ---- reply -> bubble view-model ----
   // kinds: 'product' | 'it'. For 'it', variant: 'answer' | 'no_article' | 'budget' | 'provider_error' | 'empty'.
   function replyView(data, baseUrl) {
@@ -636,9 +672,12 @@
       .filter(function (a) { return a && typeof a.title === 'string' && a.title; })
       .map(function (a) { return { id: a.id, title: a.title }; });
     var pictureText = typeof d.pictureText === 'string' && d.pictureText.trim() ? d.pictureText.trim() : '';
-    var base = { kind: 'it', topic: topic, source: source, pictureText: pictureText, cards: [], otherCards: [], note: '' };
+    var base = { kind: 'it', topic: topic, source: source, pictureText: pictureText, redacted: d.redacted === true, cards: [], otherCards: [], note: '' };
     var variant, text;
-    if (d.answerDropped === 'no_article' || openId !== null) {
+    if (d.answerDropped === 'no_article' && openId === null) {
+      // No article and the question did NOT reach IT: the page offers a retry.
+      variant = 'not_sent'; text = NOT_SENT_TEXT;
+    } else if (d.answerDropped === 'no_article' || openId !== null) {
       variant = 'no_article';
       text = hasAnswer ? d.answer.trim() : NO_ARTICLE_TEXT;
     } else if (d.answerDropped === 'budget') {
@@ -656,6 +695,7 @@
     base.openQuestionId = variant === 'no_article' ? openId : null;
     base.logId = logId;
     base.showFeedback = variant === 'answer' && logId !== null;
+    base.retry = variant === 'not_sent';
     base.historyText = variant === 'answer' || variant === 'no_article' ? text : '';
     return base;
   }
@@ -681,7 +721,8 @@
       tone: openStateTone(r.status),
       askedText: thaiDateTime(r.askedAt),
       articleTitle: art ? String(art.title || '') : '',
-      articleLines: art ? answerLines(art.body) : []
+      articleLines: art ? answerLines(art.body) : [],
+      articleGone: !art && r.status === 'answered' && r.articleDeleted === true ? ARTICLE_GONE_TEXT : ''
     };
   }
   // END PURE
@@ -1012,7 +1053,7 @@
     var box = turn.sysEl;
     box.textContent = '';
     if (turn.state === 'wait') {
-      var w = addText(box, 'div', 'bubble b-sys wait', 'กำลังหา...');
+      var w = addText(box, 'div', 'bubble b-sys wait', waitText(turn.slow));
       w.setAttribute('aria-busy', 'true');
       return;
     }
@@ -1034,6 +1075,7 @@
     bub.appendChild(makeTopicLabel(turn, v));
     if (v.lines.length) addLines(bub, v.lines);
     if (v.note) addText(bub, 'div', 'answer-note', v.note);
+    if (v.kind === 'it' && v.redacted) addText(bub, 'div', 'answer-note', REDACTED_TEXT);
     if (v.kind === 'it' && v.sources && v.sources.length) {
       var src = addText(bub, 'div', 'src', '');
       addText(src, 'b', '', 'แหล่งข้อมูล');
@@ -1046,6 +1088,15 @@
       var lk = addText(nb, 'button', 'link-btn', 'ดูในคำถามของฉัน');
       lk.type = 'button';
       lk.addEventListener('click', function () { openPanel(lk); });
+    }
+    if (v.kind === 'it' && v.retry) {
+      var rb = addText(bub, 'div', 'note-box', '');
+      addText(rb, 'span', '', 'ยังไม่ได้ส่งให้ทีมไอที');
+      var rt = addText(rb, 'button', 'btn alt small', 'ลองส่งอีกครั้ง');
+      rt.type = 'button';
+      rt.disabled = busy;
+      rt.dataset.retryBtn = '1';
+      rt.addEventListener('click', function () { ask(turn); });
     }
     box.appendChild(bub);
     if (v.showFeedback) box.appendChild(renderFeedback(v.logId, v.topic));
@@ -1070,11 +1121,13 @@
   function renderUser(turn) {
     var box = turn.userEl;
     box.textContent = '';
-    if (turn.images && turn.images.length) {
+    if (turn.images && turn.images.some(function (im) { return im.thumb || im.preview; })) {
       var pics = addText(box, 'div', 'user-pics', '');
       turn.images.forEach(function (im) {
+        var u = im.thumb || im.preview;
+        if (!u) return;
         var img = document.createElement('img');
-        img.src = im.preview;
+        img.src = u;
         img.alt = 'รูปที่แนบ';
         pics.appendChild(img);
       });
@@ -1135,7 +1188,7 @@
   function setBusy(on) {
     busy = on;
     updateSend();
-    els.thread.querySelectorAll('[data-topic-btn],[data-edit-picture]').forEach(function (b) { b.disabled = on; });
+    els.thread.querySelectorAll('[data-topic-btn],[data-edit-picture],[data-retry-btn]').forEach(function (b) { b.disabled = on; });
   }
 
   // Send (or re-send) the question of one turn. History is every answered turn before it.
@@ -1150,15 +1203,26 @@
     var idx = turns.indexOf(turn);
     var body = buildAskBody(turn, historyFromTurns(turns, idx));
     turn.state = 'wait';
+    turn.slow = false;
     setBusy(true);
     renderReply(turn);
     scrollToEnd();
+    var slowTimer = setTimeout(function () {
+      if (turn.state !== 'wait') return;
+      turn.slow = true;
+      renderReply(turn);
+    }, SLOW_WAIT_MS);
     var r = await postJson('/functions/v1/ask', body, sessionHeaders(), ASK_TIMEOUT_MS);
+    clearTimeout(slowTimer);
+    turn.slow = false;
     if (r.status === 200 && r.data && (r.data.topic === 'product' || r.data.topic === 'it')) {
       turn.view = replyView(r.data, SUPABASE_URL);
       turn.reply = turn.view.historyText ? { text: turn.view.historyText, topic: turn.view.topic } : null;
       turn.state = 'done';
       turn.error = '';
+      compactTurnImages(turn, turn.view.pictureText);
+      pruneOldPreviews(turns, KEEP_PREVIEW_TURNS, function (u) { try { URL.revokeObjectURL(u); } catch (e) { /* ignore */ } });
+      turns.forEach(function (t) { if (t.userEl && t !== turn) renderUser(t); });
       renderUser(turn);
       renderReply(turn);
       setBusy(false);
@@ -1245,8 +1309,13 @@
         var url = cv.toDataURL('image/jpeg', qualities[qi]);
         var b64 = dataUrlToBase64(url);
         if (b64 && decodedBytes(b64) <= MAX_IMAGE_BYTES) {
+          var tw = shrinkSize(sz.w, sz.h, 96);
+          var tc = document.createElement('canvas');
+          tc.width = tw.w; tc.height = tw.h;
+          tc.getContext('2d').drawImage(cv, 0, 0, tw.w, tw.h);
+          var thumb = tc.toDataURL('image/jpeg', 0.6);
           if (src.close) src.close();
-          return { data: b64, preview: url };
+          return { data: b64, preview: url, thumb: thumb };
         }
       }
       cap = Math.round(cap * 0.75);
@@ -1339,6 +1408,7 @@
       var meta = addText(card, 'div', 'oq-meta', '');
       addText(meta, 'span', 'state ' + v.tone, v.stateLabel);
       if (v.askedText) addText(meta, 'span', '', v.askedText);
+      if (v.articleGone) addText(card, 'p', 'oq-gone', v.articleGone);
       if (v.articleTitle || v.articleLines.length) {
         var art = addText(card, 'div', 'oq-art', '');
         if (v.articleTitle) addText(art, 'b', '', v.articleTitle);

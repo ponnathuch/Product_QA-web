@@ -98,6 +98,8 @@
   .draft-head { display: flex; flex-wrap: wrap; gap: var(--space-2); align-items: center; }
   .draft-head input[type="checkbox"] { width: var(--size-icon); height: var(--size-icon); flex: 0 0 auto; }
   .draft-head label { font-weight: bold; color: var(--c-ink-2); }
+  .draft-group { font-size: var(--fs-s); color: var(--c-ink-2); margin: var(--space-4) 0 var(--space-2); padding-bottom: var(--space-1); border-bottom: 1px solid var(--c-line-strong); word-break: break-word; }
+  #pdfKindWrap { flex: 1 1 var(--size-field); min-width: 0; }
   .draft .src { color: var(--c-ink-3); font-size: var(--fs-xs); margin: var(--space-2) 0 0; word-break: break-word; }
 
   #oldBrowser { max-width: var(--max-narrow); margin: var(--space-6) auto; padding: 0 var(--space-4); }
@@ -171,8 +173,13 @@
         </div>
         <button type="button" id="articleSearchBtn" class="btn alt">ค้นหา</button>
         <button type="button" id="articleNew" class="btn">เขียนบทความใหม่</button>
-        <button type="button" id="pdfBtn" class="btn alt" hidden>สร้างบทความจากไฟล์ PDF</button>
-        <input type="file" id="pdfFile" accept=".pdf,application/pdf" hidden>
+        <div id="pdfKindWrap" hidden>
+          <label class="lbl" for="pdfKind">ประเภทเอกสาร</label>
+          <!-- ds-allow-native-select: native select keeps keyboard and screen-reader behaviour on old Edge 109 -->
+          <select id="pdfKind" class="input"><option value="manual">คู่มือ / วิธีแก้ปัญหา</option><option value="policy">นโยบาย / ระเบียบ</option></select>
+        </div>
+        <button type="button" id="pdfBtn" class="btn alt" hidden>สร้างบทความจากไฟล์</button>
+        <input type="file" id="pdfFile" accept=".pdf,.jpg,.jpeg,.png,application/pdf,image/jpeg,image/png" multiple hidden>
       </div>
       <p id="pdfNote" class="note" role="status" aria-live="polite"></p>
       <ul id="articleList" class="list"></ul>
@@ -237,8 +244,9 @@
 
     <!-- PDF drafts review: replaces the list of the Articles tab -->
     <section id="pdfPanel" class="panel" aria-labelledby="hPdf" hidden>
-      <h2 id="hPdf">ตรวจร่างบทความจากไฟล์ PDF</h2>
+      <h2 id="hPdf">ตรวจร่างบทความจากไฟล์</h2>
       <p id="pdfSummary" class="note" tabindex="-1"></p>
+      <p id="pdfFailed" class="note" role="status"></p>
       <div id="pdfCards"></div>
       <div class="actions">
         <button type="button" id="pdfSave" class="btn"></button>
@@ -598,20 +606,56 @@
     return kind === 'answer' ? 'ตอบคำถามเป็นบทความ' : kind === 'edit' ? 'แก้บทความ' : 'เขียนบทความใหม่';
   }
 
-  // ----- PDF manual -> article drafts -----
+  // ----- Files (PDF / picture) -> article drafts -----
   var PDF_MAX_BYTES = 6 * 1024 * 1024;
+  var PDF_MAX_FILES = 10;
   var PDF_TIMEOUT_MS = 120000;
-  var PDF_WAIT_TEXT = 'กำลังอ่านคู่มือ อาจใช้เวลา 30-90 วินาที';
+  var PDF_WAIT_TEXT = 'อาจใช้เวลา 30-90 วินาทีต่อไฟล์';
   var PDF_SECRET_NOTE = 'อาจมีรหัสผ่านหรือคีย์ ตรวจและลบก่อนบันทึก';
   var PDF_DISCARD_TEXT = 'ร่างบทความที่ยังไม่ได้บันทึกจะหายไป';
   var PDF_EMPTY_TEXT = 'ไม่พบเนื้อหาที่ทำเป็นบทความได้ในไฟล์นี้';
+  var PDF_LIMIT_TEXT = 'วันนี้อ่านไฟล์ครบจำนวนแล้ว ลองใหม่พรุ่งนี้';
+  var PDF_MIMES = ['application/pdf', 'image/jpeg', 'image/png'];
+  var PDF_KINDS = [{ id: 'manual', label: 'คู่มือ / วิธีแก้ปัญหา', tag: 'คู่มือ' }, { id: 'policy', label: 'นโยบาย / ระเบียบ', tag: 'นโยบาย' }];
+  function pdfKind(kind) { return kind === 'policy' ? 'policy' : 'manual'; }
+  // Mime of a picked file: the browser type when it is allowed, else the extension, else ''.
+  function pdfMime(file) {
+    var name = file && typeof file.name === 'string' ? file.name : '';
+    var type = file && typeof file.type === 'string' ? file.type.toLowerCase() : '';
+    if (type === 'image/jpg') type = 'image/jpeg';
+    if (PDF_MIMES.indexOf(type) !== -1) return type;
+    if (/\.pdf$/i.test(name)) return 'application/pdf';
+    if (/\.jpe?g$/i.test(name)) return 'image/jpeg';
+    if (/\.png$/i.test(name)) return 'image/png';
+    return '';
+  }
   function pdfCheck(file) {
-    if (!file || typeof file.name !== 'string' || !file.name) return { ok: false, text: 'กรุณาเลือกไฟล์ PDF' };
-    var typeOk = !file.type || file.type === 'application/pdf';
-    if (!/\.pdf$/i.test(file.name) || !typeOk) return { ok: false, text: 'เลือกได้เฉพาะไฟล์ PDF (นามสกุล .pdf)' };
-    if (!(file.size > 0)) return { ok: false, text: 'ไฟล์นี้ว่างเปล่า' };
-    if (file.size > PDF_MAX_BYTES) return { ok: false, text: 'ไฟล์ใหญ่เกิน 6 MB' };
-    return { ok: true, text: '' };
+    if (!file || typeof file.name !== 'string' || !file.name) return { ok: false, text: 'กรุณาเลือกไฟล์', mime: '' };
+    if (/\.docx?$/i.test(file.name)) return { ok: false, text: '.docx ให้บันทึกเป็น PDF ก่อน', mime: '' };
+    var mime = pdfMime(file);
+    if (!mime) return { ok: false, text: 'เลือกได้เฉพาะไฟล์ PDF, JPG หรือ PNG', mime: '' };
+    if (!(file.size > 0)) return { ok: false, text: 'ไฟล์นี้ว่างเปล่า', mime: mime };
+    if (file.size > PDF_MAX_BYTES) return { ok: false, text: 'ไฟล์ใหญ่เกิน 6 MB', mime: mime };
+    return { ok: true, text: '', mime: mime };
+  }
+  // files: array of { name, size, type }. -> { accepted: [{ file, mime }], skipped: [{ name, text }] }
+  function pdfFilterBatch(files) {
+    var out = { accepted: [], skipped: [] };
+    (Array.isArray(files) ? files : []).forEach(function (f) {
+      var chk = pdfCheck(f);
+      var name = f && typeof f.name === 'string' && f.name ? f.name : '(ไม่มีชื่อ)';
+      if (!chk.ok) out.skipped.push({ name: name, text: chk.text });
+      else if (out.accepted.length >= PDF_MAX_FILES) out.skipped.push({ name: name, text: 'เกิน ' + PDF_MAX_FILES + ' ไฟล์ต่อครั้ง' });
+      else out.accepted.push({ file: f, mime: chk.mime });
+    });
+    return out;
+  }
+  function pdfSkippedText(skipped) {
+    var list = Array.isArray(skipped) ? skipped : [];
+    return list.length ? 'ข้ามไฟล์: ' + list.map(function (s) { return s.name + ' (' + s.text + ')'; }).join(', ') : '';
+  }
+  function pdfProgressText(i, n, name) {
+    return 'กำลังอ่านไฟล์ ' + i + '/' + n + ': ' + name + ' ' + PDF_WAIT_TEXT;
   }
   // Uint8Array (or array of bytes) -> base64 string, in chunks so big files do not overflow the call stack.
   function bytesToBase64(bytes) {
@@ -623,29 +667,35 @@
     }
     return btoa(out);
   }
-  function pdfDraftBody(name, data) { return { action: 'pdf.draft', name: name, data: data }; }
+  function pdfDraftBody(name, data, mime, kind) {
+    // The server accepts a file name of up to 200 characters.
+    return { action: 'pdf.draft', name: String(name === undefined || name === null ? '' : name).slice(0, 200), data: data, mime: PDF_MIMES.indexOf(mime) !== -1 ? mime : 'application/pdf', kind: pdfKind(kind) };
+  }
   function pdfErrorText(status, code) {
     if (status === 400 && code !== 'secret_detected') return 'ไฟล์ไม่ใช่ PDF ที่อ่านได้';
     if (status === 413) return 'ไฟล์ใหญ่เกิน 6 MB';
-    if (status === 429) return 'วันนี้อ่านไฟล์ครบจำนวนแล้ว ลองใหม่พรุ่งนี้';
+    if (status === 429) return PDF_LIMIT_TEXT;
     if (status === 502) return 'อ่านไฟล์ไม่สำเร็จ ลองอีกครั้ง';
     return errorText(status, code);
   }
-  function pdfBaseName(name) { return String(name || '').replace(/\.pdf$/i, '').replace(/\s+/g, ' ').trim(); }
-  function pdfTag(name) {
+  function pdfBaseName(name) { return String(name || '').replace(/\.(pdf|jpe?g|png)$/i, '').replace(/\s+/g, ' ').trim(); }
+  function pdfTag(name, kind) {
     var base = pdfBaseName(name);
-    return base ? ('คู่มือ: ' + base).slice(0, TAG_MAX).trim() : '';
+    var prefix = pdfKind(kind) === 'policy' ? PDF_KINDS[1].tag : PDF_KINDS[0].tag;
+    return base ? (prefix + ': ' + base).slice(0, TAG_MAX).trim() : '';
   }
   // Adds the file-name tag after the draft's own tags, only when it fits the tag limit.
-  function withFileTag(tags, name) {
+  function withFileTag(tags, name, kind) {
     var out = Array.isArray(tags) ? tags.slice() : [];
-    var tag = pdfTag(name);
+    var tag = pdfTag(name, kind);
     if (tag && out.indexOf(tag) === -1 && out.length < TAGS_MAX) out.push(tag);
     return out;
   }
   function normalizeDraft(d) {
     var src = d && typeof d === 'object' ? d : {};
-    var pages = Array.isArray(src.pages) ? src.pages.filter(function (p) { return typeof p === 'number' && p > 0 && p === Math.floor(p); }) : [];
+    // The server sends the page range as a string such as "5-8"; an array of page numbers is also accepted.
+    var pages = typeof src.pages === 'string' ? (src.pages.trim() ? [src.pages.trim()] : [])
+      : Array.isArray(src.pages) ? src.pages.filter(function (p) { return typeof p === 'number' && p > 0 && p === Math.floor(p); }) : [];
     var warning = src.warning === 'secret' ? 'secret' : null;
     return {
       include: warning !== 'secret', title: typeof src.title === 'string' ? src.title : '', body: typeof src.body === 'string' ? src.body : '',
@@ -660,17 +710,49 @@
       costUsd: typeof src.costUsd === 'number' && src.costUsd > 0 ? src.costUsd : 0
     };
   }
-  function draftHeaderText(count, pageCount, costUsd) {
-    return 'ได้ร่างบทความ ' + formatInt(count) + ' เรื่อง · อ่าน ' + formatInt(pageCount) + ' หน้า · ค่าใช้จ่าย ' + (costUsd > 0 ? costUsd : 0).toFixed(3) + ' USD';
+  // files: [{ name, mime, kind, pageCount, costUsd, drafts }] -> one flat list of drafts, each knowing its file.
+  function flattenDrafts(files) {
+    var out = [];
+    (Array.isArray(files) ? files : []).forEach(function (f, fi) {
+      (f.drafts || []).forEach(function (d) { d.fileName = f.name; d.kind = pdfKind(f.kind); d.fileIdx = fi; out.push(d); });
+    });
+    return out;
+  }
+  // Per-file heading in the review list: name, page count or "รูป", number of drafts.
+  function pdfGroupHeading(f) {
+    var isPic = !f || f.mime !== 'application/pdf';
+    var part = isPic ? 'รูป' : formatInt(f.pageCount || 0) + ' หน้า';
+    return (f && f.name ? f.name : '') + ' · ' + part + ' · ' + formatInt(f && f.drafts ? f.drafts.length : 0) + ' เรื่อง';
+  }
+  function draftsTotals(files) {
+    var t = { drafts: 0, files: 0, pages: 0, costUsd: 0 };
+    (Array.isArray(files) ? files : []).forEach(function (f) {
+      t.files++;
+      t.drafts += f.drafts ? f.drafts.length : 0;
+      t.pages += f.pageCount > 0 ? f.pageCount : 0;
+      t.costUsd += f.costUsd > 0 ? f.costUsd : 0;
+    });
+    return t;
+  }
+  function draftHeaderText(t) {
+    return 'ได้ร่างบทความ ' + formatInt(t.drafts) + ' เรื่อง · จาก ' + formatInt(t.files) + ' ไฟล์' +
+      (t.pages > 0 ? ' · อ่าน ' + formatInt(t.pages) + ' หน้า' : '') + ' · ค่าใช้จ่าย ' + (t.costUsd > 0 ? t.costUsd : 0).toFixed(3) + ' USD';
+  }
+  // failed: [{ name, text }], unread: [name] (left unread after a daily-limit stop)
+  function pdfFailedText(failed, unread) {
+    var parts = [];
+    if (Array.isArray(failed) && failed.length) parts.push('อ่านไม่สำเร็จ: ' + failed.map(function (f) { return f.name + ' (' + f.text + ')'; }).join(', '));
+    if (Array.isArray(unread) && unread.length) parts.push('ยังไม่ได้อ่าน: ' + unread.join(', '));
+    return parts.join(' · ');
   }
   function sourceLine(pages, name) {
     var list = Array.isArray(pages) ? pages : [];
     return list.length ? 'จากหน้า ' + list.join(', ') + ' ของไฟล์ ' + name : 'จากไฟล์ ' + name;
   }
   // draft: { title, body, tags } with tags as text. Same checks as the article form, then the file-name tag.
-  function draftCheck(draft, fileName) {
+  function draftCheck(draft, fileName, kind) {
     var chk = articleCheck({ title: draft.title, body: draft.body, tags: draft.tags });
-    if (chk.ok) chk.value.tags = withFileTag(chk.value.tags, fileName);
+    if (chk.ok) chk.value.tags = withFileTag(chk.value.tags, fileName, kind);
     return chk;
   }
   function selectedDraftCount(drafts) {
@@ -745,7 +827,7 @@
     fDelete: byId('fDelete'), fNote: byId('fNote'),
     pdfBtn: byId('pdfBtn'), pdfFile: byId('pdfFile'), pdfNote: byId('pdfNote'), pdfPanel: byId('pdfPanel'),
     pdfSummary: byId('pdfSummary'), pdfCards: byId('pdfCards'), pdfSave: byId('pdfSave'), pdfCancel: byId('pdfCancel'),
-    pdfSaveNote: byId('pdfSaveNote')
+    pdfSaveNote: byId('pdfSaveNote'), pdfFailed: byId('pdfFailed'), pdfKind: byId('pdfKind'), pdfKindWrap: byId('pdfKindWrap')
   };
 
   var state = {
@@ -1270,6 +1352,7 @@
   // ---------- PDF drafts ----------
   function pdfBusy(on) {
     els.pdfBtn.disabled = on;
+    els.pdfKind.disabled = on;
     els.articleNew.disabled = on;
     els.pdfBtn.setAttribute('aria-busy', on ? 'true' : 'false');
   }
@@ -1286,30 +1369,57 @@
       } catch (e) { fail(); }
     });
   }
+  // Reads the chosen files one after another (never in parallel); one failed file does not stop the batch,
+  // a daily-limit answer (429) stops the rest and keeps what was already read.
   function onPdfChosen() {
-    var file = els.pdfFile.files && els.pdfFile.files[0];
+    var picked = els.pdfFile.files ? Array.prototype.slice.call(els.pdfFile.files) : [];
     els.pdfFile.value = '';
-    if (!file || state.busy) return;
-    var chk = pdfCheck(file);
-    if (!chk.ok) { setNote(els.pdfNote, chk.text, 'err'); els.pdfBtn.focus(); return; }
+    if (!picked.length || state.busy) return;
+    var kind = pdfKind(els.pdfKind.value);
+    var batch = pdfFilterBatch(picked);
+    var skippedText = pdfSkippedText(batch.skipped);
+    if (!batch.accepted.length) { setNote(els.pdfNote, skippedText || 'กรุณาเลือกไฟล์', 'err'); els.pdfBtn.focus(); return; }
     state.busy = true;
     pdfBusy(true);
-    setNote(els.pdfNote, PDF_WAIT_TEXT, '');
-    readFileBase64(file).then(function (data) {
-      return api(pdfDraftBody(file.name, data), PDF_TIMEOUT_MS);
-    }).then(function (reply) {
-      var r = normalizeDraftReply(reply);
+    var files = [];
+    var failed = [];
+    var unread = [];
+    var idx = 0;
+    function finish() {
       state.busy = false;
       pdfBusy(false);
-      if (!r.drafts.length) { setNote(els.pdfNote, PDF_EMPTY_TEXT, 'warn'); return; }
+      var notes = [skippedText, pdfFailedText(failed, unread)].filter(Boolean).join(' · ');
+      if (!files.length) {
+        setNote(els.pdfNote, notes || PDF_EMPTY_TEXT, notes ? 'err' : 'warn');
+        els.pdfBtn.focus();
+        return;
+      }
       setNote(els.pdfNote, '', '');
-      startPdfReview(file.name, r);
-    }, function (err) {
-      state.busy = false;
-      pdfBusy(false);
-      setNote(els.pdfNote, pdfErrorText(err && typeof err.status === 'number' ? err.status : 500, err && err.code), 'err');
-      els.pdfBtn.focus();
-    });
+      startPdfReview(files, kind, [skippedText, pdfFailedText(failed, unread)].filter(Boolean).join(' · '));
+    }
+    function next() {
+      if (idx >= batch.accepted.length) { finish(); return; }
+      var item = batch.accepted[idx++];
+      var name = item.file.name;
+      setNote(els.pdfNote, pdfProgressText(idx, batch.accepted.length, name), '');
+      readFileBase64(item.file).then(function (data) {
+        return api(pdfDraftBody(name, data, item.mime, kind), PDF_TIMEOUT_MS);
+      }).then(function (reply) {
+        var r = normalizeDraftReply(reply);
+        if (!r.drafts.length) failed.push({ name: name, text: PDF_EMPTY_TEXT });
+        else files.push({ name: name, mime: item.mime, kind: kind, pageCount: item.mime === 'application/pdf' ? r.pageCount : 0, costUsd: r.costUsd, drafts: r.drafts });
+        next();
+      }, function (err) {
+        var status = err && typeof err.status === 'number' ? err.status : 500;
+        failed.push({ name: name, text: pdfErrorText(status, err && err.code) });
+        if (status === 429) {
+          for (var k = idx; k < batch.accepted.length; k++) unread.push(batch.accepted[k].file.name);
+          idx = batch.accepted.length;
+        }
+        next();
+      });
+    }
+    next();
   }
   function paintCounter(node, text, tone) {
     node.textContent = text;
@@ -1393,7 +1503,7 @@
     ui.tags.setAttribute('aria-describedby', 'dTagsC' + i);
     ui.tagsCounter.id = 'dTagsC' + i;
 
-    add(card, 'p', 'src', sourceLine(d.pages, state.pdf.name));
+    add(card, 'p', 'src', sourceLine(d.pages, d.fileName));
     if (d.warning === 'secret') {
       var wb = add(card, 'div', 'warnbox');
       wb.appendChild(icon('alert'));
@@ -1413,13 +1523,20 @@
     paintDraftCounters(d);
     paintDraftState(d);
   }
-  function startPdfReview(name, r) {
-    state.pdf = { name: name, drafts: r.drafts, pageCount: r.pageCount, costUsd: r.costUsd, phase: 'review' };
+  function startPdfReview(files, kind, failedNote) {
+    var drafts = flattenDrafts(files);
+    state.pdf = { files: files, kind: kind, drafts: drafts, phase: 'review' };
     state.tab = 'articles';
     clear(els.pdfCards);
-    els.pdfSummary.textContent = draftHeaderText(r.drafts.length, r.pageCount, r.costUsd);
+    els.pdfSummary.textContent = draftHeaderText(draftsTotals(files));
+    setNote(els.pdfFailed, failedNote, failedNote ? 'err' : '');
     setNote(els.pdfSaveNote, '', '');
-    r.drafts.forEach(buildDraftCard);
+    var n = 0;
+    files.forEach(function (f, fi) {
+      var gh = add(els.pdfCards, 'h3', 'draft-group', pdfGroupHeading(f));
+      gh.id = 'dGroup' + fi;
+      f.drafts.forEach(function (d) { buildDraftCard(d, n++); });
+    });
     refreshPdfButtons();
     renderTabs();
     els.pdfSummary.focus();
@@ -1431,7 +1548,7 @@
     renderTabs();
     els.pdfBtn.focus();
     if (refresh && counts.saved > 0) {
-      state.flash = { where: 'articles', text: 'เพิ่มบทความจากไฟล์ PDF แล้ว ' + counts.saved + ' เรื่อง', tone: 'ok' };
+      state.flash = { where: 'articles', text: 'เพิ่มบทความจากไฟล์แล้ว ' + counts.saved + ' เรื่อง', tone: 'ok' };
       state.loaded.open = false;
       loadArticles();
       loadLog(true);
@@ -1468,7 +1585,7 @@
       setNote(els.pdfSaveNote, 'กำลังบันทึก ' + idx + ' / ' + todo.length, '');
       d.status = 'saving';
       paintDraftState(d);
-      var chk = draftCheck(d, pdf.name);
+      var chk = draftCheck(d, d.fileName, d.kind);
       if (!chk.ok) {
         d.status = 'failed';
         d.err = chk.errors[chk.first];
@@ -1610,6 +1727,7 @@
       els.editorsHelp.textContent = editorsHelpText(me);
       els.editorAddBox.hidden = !canManageEditors(me);
       els.pdfBtn.hidden = !canEditKb(me);
+      els.pdfKindWrap.hidden = !canEditKb(me);
       els.app.hidden = false;
       fillFilter();
       buildTabs();

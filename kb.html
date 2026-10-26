@@ -91,6 +91,15 @@
   .modal-actions { display: flex; flex-wrap: wrap; gap: var(--space-2); justify-content: flex-end; margin-top: var(--space-4); }
   #scrim :focus-visible { outline-color: var(--c-brand); }
 
+  /* ---------- PDF drafts ---------- */
+  .draft { border: 1px solid var(--c-line-strong); border-radius: var(--radius-m); padding: var(--space-3); margin-bottom: var(--space-3); background: var(--c-surface); }
+  .draft.saved { border-color: var(--c-ok); }
+  .draft.failed { border-color: var(--c-err-line); }
+  .draft-head { display: flex; flex-wrap: wrap; gap: var(--space-2); align-items: center; }
+  .draft-head input[type="checkbox"] { width: var(--size-icon); height: var(--size-icon); flex: 0 0 auto; }
+  .draft-head label { font-weight: bold; color: var(--c-ink-2); }
+  .draft .src { color: var(--c-ink-3); font-size: var(--fs-xs); margin: var(--space-2) 0 0; word-break: break-word; }
+
   #oldBrowser { max-width: var(--max-narrow); margin: var(--space-6) auto; padding: 0 var(--space-4); }
 
   @media (max-width: 520px) {
@@ -162,7 +171,10 @@
         </div>
         <button type="button" id="articleSearchBtn" class="btn alt">ค้นหา</button>
         <button type="button" id="articleNew" class="btn">เขียนบทความใหม่</button>
+        <button type="button" id="pdfBtn" class="btn alt" hidden>สร้างบทความจากไฟล์ PDF</button>
+        <input type="file" id="pdfFile" accept=".pdf,application/pdf" hidden>
       </div>
+      <p id="pdfNote" class="note" role="status" aria-live="polite"></p>
       <ul id="articleList" class="list"></ul>
       <p id="articleNote" class="note" role="status" aria-live="polite"></p>
       <div class="pager">
@@ -221,6 +233,18 @@
         <button type="button" id="fDelete" class="btn danger" hidden>ลบบทความ</button>
       </div>
       <p id="fNote" class="note" role="status" aria-live="polite"></p>
+    </section>
+
+    <!-- PDF drafts review: replaces the list of the Articles tab -->
+    <section id="pdfPanel" class="panel" aria-labelledby="hPdf" hidden>
+      <h2 id="hPdf">ตรวจร่างบทความจากไฟล์ PDF</h2>
+      <p id="pdfSummary" class="note" tabindex="-1"></p>
+      <div id="pdfCards"></div>
+      <div class="actions">
+        <button type="button" id="pdfSave" class="btn"></button>
+        <button type="button" id="pdfCancel" class="btn alt">ยกเลิก</button>
+      </div>
+      <p id="pdfSaveNote" class="note" role="status" aria-live="polite"></p>
     </section>
   </div>
 </main>
@@ -573,6 +597,102 @@
   function editorTitle(kind) {
     return kind === 'answer' ? 'ตอบคำถามเป็นบทความ' : kind === 'edit' ? 'แก้บทความ' : 'เขียนบทความใหม่';
   }
+
+  // ----- PDF manual -> article drafts -----
+  var PDF_MAX_BYTES = 6 * 1024 * 1024;
+  var PDF_TIMEOUT_MS = 120000;
+  var PDF_WAIT_TEXT = 'กำลังอ่านคู่มือ อาจใช้เวลา 30-90 วินาที';
+  var PDF_SECRET_NOTE = 'อาจมีรหัสผ่านหรือคีย์ ตรวจและลบก่อนบันทึก';
+  var PDF_DISCARD_TEXT = 'ร่างบทความที่ยังไม่ได้บันทึกจะหายไป';
+  var PDF_EMPTY_TEXT = 'ไม่พบเนื้อหาที่ทำเป็นบทความได้ในไฟล์นี้';
+  function pdfCheck(file) {
+    if (!file || typeof file.name !== 'string' || !file.name) return { ok: false, text: 'กรุณาเลือกไฟล์ PDF' };
+    var typeOk = !file.type || file.type === 'application/pdf';
+    if (!/\.pdf$/i.test(file.name) || !typeOk) return { ok: false, text: 'เลือกได้เฉพาะไฟล์ PDF (นามสกุล .pdf)' };
+    if (!(file.size > 0)) return { ok: false, text: 'ไฟล์นี้ว่างเปล่า' };
+    if (file.size > PDF_MAX_BYTES) return { ok: false, text: 'ไฟล์ใหญ่เกิน 6 MB' };
+    return { ok: true, text: '' };
+  }
+  // Uint8Array (or array of bytes) -> base64 string, in chunks so big files do not overflow the call stack.
+  function bytesToBase64(bytes) {
+    var out = '';
+    var chunk = 0x8000;
+    for (var i = 0; i < bytes.length; i += chunk) {
+      var part = bytes.subarray ? bytes.subarray(i, i + chunk) : bytes.slice(i, i + chunk);
+      out += String.fromCharCode.apply(null, part);
+    }
+    return btoa(out);
+  }
+  function pdfDraftBody(name, data) { return { action: 'pdf.draft', name: name, data: data }; }
+  function pdfErrorText(status, code) {
+    if (status === 400 && code !== 'secret_detected') return 'ไฟล์ไม่ใช่ PDF ที่อ่านได้';
+    if (status === 413) return 'ไฟล์ใหญ่เกิน 6 MB';
+    if (status === 429) return 'วันนี้อ่านไฟล์ครบจำนวนแล้ว ลองใหม่พรุ่งนี้';
+    if (status === 502) return 'อ่านไฟล์ไม่สำเร็จ ลองอีกครั้ง';
+    return errorText(status, code);
+  }
+  function pdfBaseName(name) { return String(name || '').replace(/\.pdf$/i, '').replace(/\s+/g, ' ').trim(); }
+  function pdfTag(name) {
+    var base = pdfBaseName(name);
+    return base ? ('คู่มือ: ' + base).slice(0, TAG_MAX).trim() : '';
+  }
+  // Adds the file-name tag after the draft's own tags, only when it fits the tag limit.
+  function withFileTag(tags, name) {
+    var out = Array.isArray(tags) ? tags.slice() : [];
+    var tag = pdfTag(name);
+    if (tag && out.indexOf(tag) === -1 && out.length < TAGS_MAX) out.push(tag);
+    return out;
+  }
+  function normalizeDraft(d) {
+    var src = d && typeof d === 'object' ? d : {};
+    var pages = Array.isArray(src.pages) ? src.pages.filter(function (p) { return typeof p === 'number' && p > 0 && p === Math.floor(p); }) : [];
+    var warning = src.warning === 'secret' ? 'secret' : null;
+    return {
+      include: warning !== 'secret', title: typeof src.title === 'string' ? src.title : '', body: typeof src.body === 'string' ? src.body : '',
+      tags: tagsToText(Array.isArray(src.tags) ? src.tags.map(String) : []), pages: pages, warning: warning, status: 'new', err: ''
+    };
+  }
+  function normalizeDraftReply(data) {
+    var src = data && typeof data === 'object' ? data : {};
+    return {
+      drafts: Array.isArray(src.drafts) ? src.drafts.map(normalizeDraft) : [],
+      pageCount: typeof src.pageCount === 'number' && src.pageCount > 0 ? Math.floor(src.pageCount) : 0,
+      costUsd: typeof src.costUsd === 'number' && src.costUsd > 0 ? src.costUsd : 0
+    };
+  }
+  function draftHeaderText(count, pageCount, costUsd) {
+    return 'ได้ร่างบทความ ' + formatInt(count) + ' เรื่อง · อ่าน ' + formatInt(pageCount) + ' หน้า · ค่าใช้จ่าย ' + (costUsd > 0 ? costUsd : 0).toFixed(3) + ' USD';
+  }
+  function sourceLine(pages, name) {
+    var list = Array.isArray(pages) ? pages : [];
+    return list.length ? 'จากหน้า ' + list.join(', ') + ' ของไฟล์ ' + name : 'จากไฟล์ ' + name;
+  }
+  // draft: { title, body, tags } with tags as text. Same checks as the article form, then the file-name tag.
+  function draftCheck(draft, fileName) {
+    var chk = articleCheck({ title: draft.title, body: draft.body, tags: draft.tags });
+    if (chk.ok) chk.value.tags = withFileTag(chk.value.tags, fileName);
+    return chk;
+  }
+  function selectedDraftCount(drafts) {
+    var n = 0;
+    (Array.isArray(drafts) ? drafts : []).forEach(function (d) { if (d.include && d.status !== 'saved') n++; });
+    return n;
+  }
+  function draftSaveLabel(n) { return 'บันทึกที่เลือก (' + n + ')'; }
+  function queueCounts(drafts) {
+    var out = { saved: 0, failed: 0 };
+    (Array.isArray(drafts) ? drafts : []).forEach(function (d) {
+      if (d.status === 'saved') out.saved++;
+      else if (d.status === 'failed') out.failed++;
+    });
+    return out;
+  }
+  function saveSummary(saved, failed) { return 'บันทึกแล้ว ' + saved + ' เรื่อง ไม่สำเร็จ ' + failed + ' เรื่อง'; }
+  // Drafts count as unsaved work until the summary is shown, unless every one is already saved.
+  function pdfUnsaved(pdf) {
+    if (!pdf || pdf.phase === 'done' || !Array.isArray(pdf.drafts)) return false;
+    return pdf.drafts.some(function (d) { return d.status !== 'saved'; });
+  }
   // END PURE
 
   var ICONS = {
@@ -580,7 +700,8 @@
     info: [['circle', '12,12,10'], ['path', 'M12 16v-4'], ['path', 'M12 8h.01']],
     plus: [['path', 'M12 5v14'], ['path', 'M5 12h14']],
     trash: [['path', 'M3 6h18'], ['path', 'M8 6V4h8v2'], ['path', 'M19 6l-1 14H6L5 6']],
-    x: [['path', 'M18 6L6 18'], ['path', 'M6 6l12 12']]
+    x: [['path', 'M18 6L6 18'], ['path', 'M6 6l12 12']],
+    file: [['path', 'M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z'], ['path', 'M14 2v6h6'], ['path', 'M12 18v-6'], ['path', 'M9 15l3-3 3 3']]
   };
   function icon(name) {
     var svg = document.createElementNS(SVG_NS, 'svg');
@@ -621,7 +742,10 @@
     editorPanel: byId('editorPanel'), hEditor: byId('hEditor'), quote: byId('quote'), fTitle: byId('fTitle'), fBody: byId('fBody'),
     fTags: byId('fTags'), titleCounter: byId('titleCounter'), bodyCounter: byId('bodyCounter'), tagsCounter: byId('tagsCounter'),
     secretBox: byId('secretBox'), fSave: byId('fSave'), fCancel: byId('fCancel'), fDismiss: byId('fDismiss'),
-    fDelete: byId('fDelete'), fNote: byId('fNote')
+    fDelete: byId('fDelete'), fNote: byId('fNote'),
+    pdfBtn: byId('pdfBtn'), pdfFile: byId('pdfFile'), pdfNote: byId('pdfNote'), pdfPanel: byId('pdfPanel'),
+    pdfSummary: byId('pdfSummary'), pdfCards: byId('pdfCards'), pdfSave: byId('pdfSave'), pdfCancel: byId('pdfCancel'),
+    pdfSaveNote: byId('pdfSaveNote')
   };
 
   var state = {
@@ -630,7 +754,8 @@
     articleQuery: '', articleOffset: 0, articleSeq: 0, logOffset: 0, logSeq: 0,
     loaded: { open: false, articles: false, editors: false },
     flash: null, // { where, text, tone }: a note to show after the next list reload
-    edit: null // { kind: 'answer'|'new'|'edit', id, openQuestion, from, init: { title, body, tags } }
+    edit: null, // { kind: 'answer'|'new'|'edit', id, openQuestion, from, init: { title, body, tags } }
+    pdf: null // { name, drafts: [...], pageCount, costUsd, phase: 'review'|'saving'|'done' }
   };
 
   function el(tag, cls, text) {
@@ -689,9 +814,9 @@
     try { sessionStorage.removeItem(STORE_KEY); } catch (e) { /* storage blocked */ }
   }
 
-  function post(path, body, headers) {
+  function post(path, body, headers, timeoutMs) {
     var controller = new AbortController();
-    var timer = setTimeout(function () { controller.abort(); }, TIMEOUT_MS);
+    var timer = setTimeout(function () { controller.abort(); }, timeoutMs || TIMEOUT_MS);
     var h = { 'content-type': 'application/json' };
     if (headers) { for (var k in headers) { h[k] = headers[k]; } }
     return fetch(SUPABASE_URL + path, {
@@ -705,8 +830,8 @@
     });
   }
   // POST to the kb Edge Function. Resolves the JSON body on 200, rejects { status, code } otherwise.
-  function api(body) {
-    return post('/functions/v1/kb', body, { 'x-pqa-session': state.sess.session }).then(function (r) {
+  function api(body, timeoutMs) {
+    return post('/functions/v1/kb', body, { 'x-pqa-session': state.sess.session }, timeoutMs).then(function (r) {
       if (r.status === 200) return r.data;
       if (r.status === 401) {
         clearStored();
@@ -786,7 +911,7 @@
   // ---------- unsaved work ----------
   function currentForm() { return { title: els.fTitle.value, body: els.fBody.value, tags: els.fTags.value }; }
   function hasUnsaved() {
-    return !!state.edit && formDirty(state.edit.init, currentForm());
+    return (!!state.edit && formDirty(state.edit.init, currentForm())) || pdfUnsaved(state.pdf);
   }
   function confirmLeave() {
     if (!hasUnsaved()) return Promise.resolve(true);
@@ -802,7 +927,7 @@
       if (!hasUnsaved()) return;
       e.preventDefault();
       confirmLeave().then(function (ok) {
-        if (ok) { state.edit = null; window.location.href = link.getAttribute('href'); }
+        if (ok) { state.edit = null; state.pdf = null; window.location.href = link.getAttribute('href'); }
       });
     });
   }
@@ -831,15 +956,17 @@
       var on = t.id === state.tab;
       b.setAttribute('aria-selected', on ? 'true' : 'false');
       b.tabIndex = on ? 0 : -1;
-      panelOf(t.id).hidden = !on || !!state.edit;
+      panelOf(t.id).hidden = !on || !!state.edit || !!state.pdf;
     });
     els.editorPanel.hidden = !state.edit;
+    els.pdfPanel.hidden = !state.pdf;
   }
   function selectTab(id, focusTab) {
-    if (id === state.tab && !state.edit) { if (focusTab) byId('tab-' + id).focus(); return; }
+    if (id === state.tab && !state.edit && !state.pdf) { if (focusTab) byId('tab-' + id).focus(); return; }
     confirmLeave().then(function (ok) {
       if (!ok) return;
       state.edit = null;
+      state.pdf = null;
       state.tab = id;
       renderTabs();
       if (focusTab) byId('tab-' + id).focus();
@@ -1140,6 +1267,243 @@
     });
   }
 
+  // ---------- PDF drafts ----------
+  function pdfBusy(on) {
+    els.pdfBtn.disabled = on;
+    els.articleNew.disabled = on;
+    els.pdfBtn.setAttribute('aria-busy', on ? 'true' : 'false');
+  }
+  function readFileBase64(file) {
+    return new Promise(function (resolve, reject) {
+      function fail() { var e = new Error('read'); e.status = 502; reject(e); }
+      try {
+        var reader = new FileReader();
+        reader.onload = function () {
+          try { resolve(bytesToBase64(new Uint8Array(reader.result))); } catch (e) { fail(); }
+        };
+        reader.onerror = fail;
+        reader.readAsArrayBuffer(file);
+      } catch (e) { fail(); }
+    });
+  }
+  function onPdfChosen() {
+    var file = els.pdfFile.files && els.pdfFile.files[0];
+    els.pdfFile.value = '';
+    if (!file || state.busy) return;
+    var chk = pdfCheck(file);
+    if (!chk.ok) { setNote(els.pdfNote, chk.text, 'err'); els.pdfBtn.focus(); return; }
+    state.busy = true;
+    pdfBusy(true);
+    setNote(els.pdfNote, PDF_WAIT_TEXT, '');
+    readFileBase64(file).then(function (data) {
+      return api(pdfDraftBody(file.name, data), PDF_TIMEOUT_MS);
+    }).then(function (reply) {
+      var r = normalizeDraftReply(reply);
+      state.busy = false;
+      pdfBusy(false);
+      if (!r.drafts.length) { setNote(els.pdfNote, PDF_EMPTY_TEXT, 'warn'); return; }
+      setNote(els.pdfNote, '', '');
+      startPdfReview(file.name, r);
+    }, function (err) {
+      state.busy = false;
+      pdfBusy(false);
+      setNote(els.pdfNote, pdfErrorText(err && typeof err.status === 'number' ? err.status : 500, err && err.code), 'err');
+      els.pdfBtn.focus();
+    });
+  }
+  function paintCounter(node, text, tone) {
+    node.textContent = text;
+    node.className = 'counter' + (tone ? ' ' + tone : '');
+  }
+  function paintDraftCounters(d) {
+    var t = d.title.replace(/\s+/g, ' ').trim().length;
+    var b = normalizeText(d.body).trim().length;
+    var n = parseTags(d.tags).tags.length;
+    paintCounter(d.ui.titleCounter, counterText(t, TITLE_MAX), counterTone(t, TITLE_MAX));
+    paintCounter(d.ui.bodyCounter, counterText(b, BODY_MAX), counterTone(b, BODY_MAX));
+    paintCounter(d.ui.tagsCounter, tagsCounterText(n), counterTone(n, TAGS_MAX));
+  }
+  function paintDraftState(d) {
+    var ui = d.ui;
+    var editable = state.pdf && state.pdf.phase === 'review' && d.status !== 'saved';
+    [ui.sel, ui.title, ui.body, ui.tags].forEach(function (n) { n.disabled = !editable; });
+    ui.card.className = 'draft' + (d.status === 'saved' ? ' saved' : d.status === 'failed' ? ' failed' : '');
+    ui.stateTag.hidden = !(d.status === 'saved' || d.status === 'failed' || d.status === 'saving');
+    ui.stateTag.className = 'tag ' + (d.status === 'saved' ? 'ok' : d.status === 'failed' ? 'err' : 'warn');
+    ui.stateTag.textContent = d.status === 'saved' ? 'บันทึกแล้ว' : d.status === 'failed' ? 'ไม่สำเร็จ' : 'กำลังบันทึก...';
+    ui.errNote.textContent = d.status === 'failed' ? d.err : '';
+    ui.errNote.hidden = d.status !== 'failed';
+  }
+  function refreshPdfButtons() {
+    var pdf = state.pdf;
+    if (!pdf) return;
+    var n = selectedDraftCount(pdf.drafts);
+    els.pdfSave.textContent = draftSaveLabel(n);
+    els.pdfSave.disabled = pdf.phase !== 'review' || n === 0;
+    els.pdfSave.hidden = pdf.phase === 'done';
+    els.pdfCancel.textContent = pdf.phase === 'done' ? 'กลับไปรายการบทความ' : 'ยกเลิก';
+    els.pdfCancel.disabled = pdf.phase === 'saving';
+  }
+  function buildDraftCard(d, i) {
+    var ui = {};
+    d.ui = ui;
+    var card = add(els.pdfCards, 'div', 'draft');
+    ui.card = card;
+    var head = add(card, 'div', 'draft-head');
+    ui.sel = add(head, 'input');
+    ui.sel.type = 'checkbox';
+    ui.sel.id = 'dSel' + i;
+    ui.sel.checked = d.include;
+    var selLabel = add(head, 'label', '', 'บทความที่ ' + (i + 1));
+    selLabel.htmlFor = ui.sel.id;
+    ui.stateTag = add(head, 'span', 'tag', '');
+    ui.stateTag.setAttribute('role', 'status');
+    ui.stateTag.hidden = true;
+    ui.sel.addEventListener('change', function () { d.include = ui.sel.checked; refreshPdfButtons(); });
+
+    var l1 = add(card, 'label', 'lbl', 'หัวข้อ');
+    ui.title = add(card, 'input', 'input');
+    ui.title.type = 'text';
+    ui.title.id = 'dTitle' + i;
+    ui.title.autocomplete = 'off';
+    ui.title.value = d.title;
+    l1.htmlFor = ui.title.id;
+    ui.titleCounter = add(card, 'div', 'counter');
+    ui.title.setAttribute('aria-describedby', 'dTitleC' + i);
+    ui.titleCounter.id = 'dTitleC' + i;
+
+    var l2 = add(card, 'label', 'lbl', 'เนื้อหา');
+    ui.body = add(card, 'textarea', 'input');
+    ui.body.id = 'dBody' + i;
+    ui.body.rows = 8;
+    ui.body.value = d.body;
+    l2.htmlFor = ui.body.id;
+    ui.bodyCounter = add(card, 'div', 'counter');
+    ui.body.setAttribute('aria-describedby', 'dBodyC' + i);
+    ui.bodyCounter.id = 'dBodyC' + i;
+
+    var l3 = add(card, 'label', 'lbl', 'แท็ก (คั่นด้วยจุลภาค)');
+    ui.tags = add(card, 'input', 'input');
+    ui.tags.type = 'text';
+    ui.tags.id = 'dTags' + i;
+    ui.tags.autocomplete = 'off';
+    ui.tags.value = d.tags;
+    l3.htmlFor = ui.tags.id;
+    ui.tagsCounter = add(card, 'div', 'counter');
+    ui.tags.setAttribute('aria-describedby', 'dTagsC' + i);
+    ui.tagsCounter.id = 'dTagsC' + i;
+
+    add(card, 'p', 'src', sourceLine(d.pages, state.pdf.name));
+    if (d.warning === 'secret') {
+      var wb = add(card, 'div', 'warnbox');
+      wb.appendChild(icon('alert'));
+      add(wb, 'span', '', PDF_SECRET_NOTE);
+    }
+    ui.errNote = add(card, 'p', 'note err', '');
+    ui.errNote.setAttribute('role', 'alert');
+    ui.errNote.hidden = true;
+
+    [['title', ui.title], ['body', ui.body], ['tags', ui.tags]].forEach(function (p) {
+      p[1].addEventListener('input', function () {
+        d[p[0]] = p[1].value;
+        paintDraftCounters(d);
+        markField(p[1], false);
+      });
+    });
+    paintDraftCounters(d);
+    paintDraftState(d);
+  }
+  function startPdfReview(name, r) {
+    state.pdf = { name: name, drafts: r.drafts, pageCount: r.pageCount, costUsd: r.costUsd, phase: 'review' };
+    state.tab = 'articles';
+    clear(els.pdfCards);
+    els.pdfSummary.textContent = draftHeaderText(r.drafts.length, r.pageCount, r.costUsd);
+    setNote(els.pdfSaveNote, '', '');
+    r.drafts.forEach(buildDraftCard);
+    refreshPdfButtons();
+    renderTabs();
+    els.pdfSummary.focus();
+    try { els.pdfPanel.scrollIntoView(); } catch (e) { /* ignore */ }
+  }
+  function closePdf(refresh) {
+    var counts = state.pdf ? queueCounts(state.pdf.drafts) : { saved: 0, failed: 0 };
+    state.pdf = null;
+    renderTabs();
+    els.pdfBtn.focus();
+    if (refresh && counts.saved > 0) {
+      state.flash = { where: 'articles', text: 'เพิ่มบทความจากไฟล์ PDF แล้ว ' + counts.saved + ' เรื่อง', tone: 'ok' };
+      state.loaded.open = false;
+      loadArticles();
+      loadLog(true);
+    }
+  }
+  function markDraftFields(d, fields) {
+    if (fields.indexOf('title') !== -1) markField(d.ui.title, true);
+    if (fields.indexOf('body') !== -1) markField(d.ui.body, true);
+    if (fields.indexOf('tags') !== -1) markField(d.ui.tags, true);
+  }
+  function savePdfDrafts() {
+    var pdf = state.pdf;
+    if (!pdf || state.busy || pdf.phase !== 'review') return;
+    var todo = pdf.drafts.filter(function (d) { return d.include && d.status !== 'saved'; });
+    if (!todo.length) return;
+    state.busy = true;
+    pdf.phase = 'saving';
+    pdf.drafts.forEach(function (d) { markField(d.ui.title, false); markField(d.ui.body, false); markField(d.ui.tags, false); });
+    refreshPdfButtons();
+    pdf.drafts.forEach(paintDraftState);
+    var idx = 0;
+    function finish() {
+      state.busy = false;
+      pdf.phase = 'done';
+      var c = queueCounts(pdf.drafts);
+      pdf.drafts.forEach(paintDraftState);
+      refreshPdfButtons();
+      setNote(els.pdfSaveNote, saveSummary(c.saved, c.failed), c.failed ? 'err' : 'ok');
+      if (state.pdf === pdf) els.pdfCancel.focus();
+    }
+    function next() {
+      if (idx >= todo.length) { finish(); return; }
+      var d = todo[idx++];
+      setNote(els.pdfSaveNote, 'กำลังบันทึก ' + idx + ' / ' + todo.length, '');
+      d.status = 'saving';
+      paintDraftState(d);
+      var chk = draftCheck(d, pdf.name);
+      if (!chk.ok) {
+        d.status = 'failed';
+        d.err = chk.errors[chk.first];
+        markDraftFields(d, [chk.first]);
+        paintDraftState(d);
+        Promise.resolve().then(next);
+        return;
+      }
+      api(articleCreateBody(chk.value, null)).then(function () {
+        d.status = 'saved';
+        d.err = '';
+      }, function (err) {
+        d.status = 'failed';
+        if (err && isSecretError(err.status, err.code)) {
+          d.err = SECRET_TEXT;
+          markDraftFields(d, secretFields(d.title, d.body));
+        } else {
+          d.err = failText(err);
+        }
+      }).then(function () {
+        paintDraftState(d);
+        next();
+      });
+    }
+    next();
+  }
+  function cancelPdf() {
+    var pdf = state.pdf;
+    if (!pdf || pdf.phase === 'saving') return;
+    if (pdf.phase === 'done') { closePdf(true); return; }
+    confirmBox('ทิ้งร่างบทความทั้งหมด?', PDF_DISCARD_TEXT, 'ทิ้งร่าง', true).then(function (ok) {
+      if (ok) closePdf(false);
+    });
+  }
+
   // ---------- change history ----------
   function loadLog(reset) {
     if (reset) { state.logOffset = 0; }
@@ -1245,6 +1609,7 @@
       els.who.textContent = (els.who.textContent ? els.who.textContent + ' · ' : '') + roleLabel(me);
       els.editorsHelp.textContent = editorsHelpText(me);
       els.editorAddBox.hidden = !canManageEditors(me);
+      els.pdfBtn.hidden = !canEditKb(me);
       els.app.hidden = false;
       fillFilter();
       buildTabs();
@@ -1306,6 +1671,15 @@
   els.articleNew.addEventListener('click', newArticle);
   els.articlePrev.addEventListener('click', function () { state.articleOffset = Math.max(0, state.articleOffset - LIST_PAGE); loadArticles(); });
   els.articleNext.addEventListener('click', function () { state.articleOffset += LIST_PAGE; loadArticles(); });
+  (function () {
+    var ic = icon('file');
+    ic.setAttribute('class', 'ic');
+    els.pdfBtn.insertBefore(ic, els.pdfBtn.firstChild);
+  })();
+  els.pdfBtn.addEventListener('click', function () { if (!state.busy) els.pdfFile.click(); });
+  els.pdfFile.addEventListener('change', onPdfChosen);
+  els.pdfSave.addEventListener('click', savePdfDrafts);
+  els.pdfCancel.addEventListener('click', cancelPdf);
   els.logMore.addEventListener('click', function () { loadLog(false); });
   els.editorAdd.addEventListener('click', addEditor);
   els.editorU.addEventListener('keydown', function (e) { if (e.key === 'Enter') { e.preventDefault(); addEditor(); } });

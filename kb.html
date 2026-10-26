@@ -119,8 +119,26 @@
   .draft-pic .pic-main { flex: 1 1 var(--size-field); }
   .draft-pic .pic-check { display: flex; gap: var(--space-2); align-items: center; font-weight: bold; color: var(--c-ink-2); }
   .draft-pic .pic-check input { width: var(--size-icon); height: var(--size-icon); }
+  .draft-pages { margin-top: var(--space-3); padding: var(--space-3); border: 1px dashed var(--c-line-strong); border-radius: var(--radius-m); background: var(--c-surface-2); }
+  .draft-pages h4 { margin: 0 0 var(--space-2); font-size: var(--fs-s); color: var(--c-ink-2); }
+  details.draft-pages > summary { min-height: var(--size-target-lg); display: flex; align-items: center; cursor: pointer; font-weight: bold; color: var(--c-ink-2); }
+  .pg-rows { display: flex; flex-direction: column; gap: var(--space-3); margin-top: var(--space-3); }
+  .pg-row { display: flex; flex-wrap: wrap; gap: var(--space-3); padding: var(--space-3); border: 1px solid var(--c-line); border-radius: var(--radius-m); background: var(--c-surface); }
+  .pg-row .pic-thumb { flex: 0 0 var(--size-tile); text-align: center; padding: var(--space-1); overflow: hidden; }
+  .pg-row .pic-main { flex: 1 1 var(--size-field); }
+  .pg-row .pic-check { display: flex; gap: var(--space-2); align-items: center; min-height: var(--size-target-lg); font-weight: bold; color: var(--c-ink-2); }
+  .pg-row .pic-check input { width: var(--size-icon); height: var(--size-icon); }
+  .pg-add { display: flex; flex-wrap: wrap; gap: var(--space-2); align-items: flex-end; margin-top: var(--space-3); }
+  .pg-add input[type="number"] { width: calc(var(--size-tile) / 2); min-height: var(--size-target-lg); }
+  .pg-add .btn { min-height: var(--size-target-lg); }
+  .pg-row .btn { min-height: var(--size-target-lg); margin-top: var(--space-2); }
+  #draftPicView { max-width: 96vw; border: 1px solid var(--c-line-strong); border-radius: var(--radius-m); background: var(--c-surface); color: var(--c-ink); padding: var(--space-3); }
+  #draftPicView img { display: block; max-width: 100%; max-height: 70vh; margin: 0 auto var(--space-3); background: var(--c-img-backing); }
+  #pdfRenderRow { display: flex; flex-wrap: wrap; gap: var(--space-2); align-items: center; }
+  #pdfRenderRow .btn { min-height: var(--size-target-lg); }
   @media (prefers-color-scheme: dark) {
     .pic-thumb { --c-img-backing: var(--c-surface-2); }
+    #draftPicView img { --c-img-backing: var(--c-surface-2); }
   }
 
   #oldBrowser { max-width: var(--max-narrow); margin: var(--space-6) auto; padding: 0 var(--space-4); }
@@ -283,7 +301,12 @@
       <h2 id="hPdf">ตรวจร่างบทความจากไฟล์</h2>
       <p id="pdfSummary" class="note" tabindex="-1"></p>
       <p id="pdfFailed" class="note" role="status"></p>
+      <div id="pdfRenderRow">
+        <p id="pdfRender" class="note" role="status"></p>
+        <button type="button" id="pdfRetry" class="btn alt" hidden>ลองโหลดภาพอีกครั้ง</button>
+      </div>
       <div id="pdfCards"></div>
+      <p id="pdfQuota" class="note" role="status" hidden></p>
       <div class="actions">
         <button type="button" id="pdfSave" class="btn"></button>
         <button type="button" id="pdfCancel" class="btn alt">ยกเลิก</button>
@@ -294,6 +317,12 @@
 </main>
 
 <div id="scrim"></div>
+
+<dialog id="draftPicView" aria-labelledby="draftPicLabel">
+  <img id="draftPicImg" alt="">
+  <p id="draftPicLabel" class="note"></p>
+  <button type="button" id="draftPicClose" class="btn alt">ปิด</button>
+</dialog>
 
 <script>
 (function () {
@@ -767,9 +796,13 @@
     var pages = typeof src.pages === 'string' ? (src.pages.trim() ? [src.pages.trim()] : [])
       : Array.isArray(src.pages) ? src.pages.filter(function (p) { return typeof p === 'number' && p > 0 && p === Math.floor(p); }) : [];
     var warning = src.warning === 'secret' ? 'secret' : null;
+    // visual / picturePages are new and may be missing (older server): no candidates then.
+    var wanted = draftPicPages(src.picturePages, DRAFT_PAGE_POS_MAX);
+    var picturePages = src.visual === true ? wanted : [];
     return {
       include: warning !== 'secret', title: typeof src.title === 'string' ? src.title : '', body: typeof src.body === 'string' ? src.body : '',
-      tags: tagsToText(Array.isArray(src.tags) ? src.tags.map(String) : []), pages: pages, warning: warning, status: 'new', err: ''
+      tags: tagsToText(Array.isArray(src.tags) ? src.tags.map(String) : []), pages: pages, warning: warning, status: 'new', err: '',
+      visual: picturePages.length > 0, picturePages: picturePages
     };
   }
   function normalizeDraftReply(data) {
@@ -946,6 +979,211 @@
     if (!(sent > 0) || n >= sent) return '';
     return 'บันทึกบทความแล้ว แต่แนบรูปได้ ' + n + ' จาก ' + sent + ' รูป เปิดบทความเพื่อเพิ่มรูปที่เหลือ';
   }
+
+  // ----- PDF page pictures -----
+  // pdf.js is loaded lazily from cdnjs (IT Editors at HQ only). Version, URLs and SRI hashes are pinned together.
+  var PDFJS = {
+    version: '3.11.174',
+    libUrl: 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js',
+    libSri: 'sha512-q+4liFwdPC/bNdhUpZx6aXDx/h77yEQtn4I1slHydcbZK34nLaR3cAeYSJshoxIOq3mjEf7xJE8YWIUHMn+oCQ==',
+    workerUrl: 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js',
+    workerSri: 'sha512-BbrZ76UNZq5BhH7LL7pn9A4TKQpQeNCHOo65/akfelcIBbcVvYWOFQKPXIrykE3qZxYjmDX573oa4Ywsc7rpTw=='
+  };
+  var DRAFT_PAGE_POS_MAX = 2000;
+  var PAGE_RENDER_MAX = 1600;
+  var PAGE_SCALE_MAX = 4;
+  var PLAN_FILE_MAX = 40;
+  var PLAN_BATCH_MAX = 60;
+  var PAGE_TIMEOUT_MS = 20000;
+  var LIB_TIMEOUT_MS = 20000;
+  var OPEN_TIMEOUT_MS = 30000;
+  var SAVE_WAIT_MS = 25000;
+  var PUT_TIMEOUT_MS = 60000;
+  var PIC_DAILY_CAP = 60;
+  var PAGE_NONE_TEXT = 'ไม่มีหน้านี้ในไฟล์';
+  var PAGE_DUP_TEXT = 'มีหน้านี้แล้ว';
+  var PAGE_FAIL_TEXT = 'แสดงหน้านี้ไม่ได้';
+  var PDF_FILE_FAIL_TEXT = 'แสดงภาพจากไฟล์นี้ไม่ได้';
+  var PDF_LIB_FAIL_TEXT = 'แสดงภาพจาก PDF ไม่ได้ บทความจะบันทึกเป็นข้อความเท่านั้น';
+  var PLAN_FILE_TEXT = 'แสดงภาพได้ไม่เกิน 40 หน้าต่อไฟล์';
+  var PLAN_BATCH_TEXT = 'แสดงภาพได้ไม่เกิน 60 หน้าต่อการอ่านครั้งเดียว';
+  var PAGE_WARN_TEXT = 'หน้าเอกสารอาจมีข้อมูลลูกค้าหรือรหัส ตรวจทุกภาพก่อนบันทึก ถ้าต้องครอบตัด ให้เอาเครื่องหมายออก แล้วแนบรูปที่ครอบตัดแล้วในหน้าแก้ไขบทความ';
+  var DAILY_LIMIT_SAVE_TEXT = 'เหลือโควตารูปไม่พอ เอาเครื่องหมายรูปออกเพื่อบันทึกเป็นข้อความ หรือบันทึกพรุ่งนี้';
+  var DAILY_LIMIT_DRAFT_TEXT = 'เหลือโควตารูปไม่พอ';
+  var PAGE_POS_LABEL = 'ลำดับหน้าในไฟล์ PDF';
+  var NOT_INT_RE = /^[0-9]{1,4}$/;
+  function pageNumber(p) {
+    var n = typeof p === 'string' && NOT_INT_RE.test(p.trim()) ? Number(p.trim()) : p;
+    return typeof n === 'number' && n === Math.floor(n) && n >= 1 ? n : 0;
+  }
+  // Picture pages of a draft clamped to the document: integers 1..numPages, no repeats, the first 4 in the model's
+  // order (most useful first), then ascending (steps read in page order).
+  function draftPicPages(list, numPages) {
+    var max = numPages > 0 ? Math.floor(numPages) : 0;
+    var out = [];
+    (Array.isArray(list) ? list : []).forEach(function (p) {
+      var n = pageNumber(p);
+      if (n < 1 || n > max || out.indexOf(n) !== -1 || out.length >= PIC_MAX) return;
+      out.push(n);
+    });
+    return out.sort(function (a, b) { return a - b; });
+  }
+  // files: [{ mime, drafts: [{ picturePages }] }]. pdf.js is only needed for a PDF with at least one proposed page.
+  function needsPdfJs(files) {
+    return (Array.isArray(files) ? files : []).some(function (f) {
+      return !!f && f.mime === 'application/pdf' && Array.isArray(f.drafts) &&
+        f.drafts.some(function (d) { return !!d && Array.isArray(d.picturePages) && d.picturePages.length > 0; });
+    });
+  }
+  // Unique { fileIdx, page } in on-screen draft order (a draft's cands win over its picturePages), at most 40 per
+  // file and 60 per batch; pages past a cap come back in skipped with the reason 'file' | 'batch'.
+  function renderPlan(files) {
+    var items = [];
+    var skipped = [];
+    var seen = {};
+    var perFile = {};
+    (Array.isArray(files) ? files : []).forEach(function (f, fi) {
+      if (!f || f.mime !== 'application/pdf') return;
+      (f.drafts || []).forEach(function (d) {
+        var pages = Array.isArray(d.cands) ? d.cands.filter(function (c) { return !c.failed; }).map(function (c) { return c.page; })
+          : (Array.isArray(d.picturePages) ? d.picturePages : []);
+        pages.forEach(function (p) {
+          var key = fi + ':' + p;
+          if (seen[key]) return;
+          seen[key] = true;
+          if ((perFile[fi] || 0) >= PLAN_FILE_MAX) { skipped.push({ fileIdx: fi, page: p, reason: 'file' }); return; }
+          if (items.length >= PLAN_BATCH_MAX) { skipped.push({ fileIdx: fi, page: p, reason: 'batch' }); return; }
+          perFile[fi] = (perFile[fi] || 0) + 1;
+          items.push({ fileIdx: fi, page: p });
+        });
+      });
+    });
+    return { items: items, skipped: skipped };
+  }
+  // Scale so the canvas longest side is at most 1600 px and the scale at most 4 (w, h from the scale-1 viewport).
+  function pageRenderScale(w, h) {
+    var m = Math.max(w, h);
+    if (!(m > 0)) return 1;
+    return Math.min(PAGE_RENDER_MAX / m, PAGE_SCALE_MAX);
+  }
+  function newCand(page) { return { page: page, on: true, failed: false, caption: '' }; }
+  function withProps(o, p) {
+    var out = {};
+    Object.keys(o).forEach(function (k) { out[k] = o[k]; });
+    Object.keys(p).forEach(function (k) { out[k] = p[k]; });
+    return out;
+  }
+  function candsOf(pages) { return (Array.isArray(pages) ? pages : []).map(newCand); }
+  function pickedCount(cands) {
+    var n = 0;
+    (Array.isArray(cands) ? cands : []).forEach(function (c) { if (c && c.on && !c.failed) n++; });
+    return n;
+  }
+  // Add a page the editor typed. Under 4 candidates it is added ticked; with 4 it replaces the first unticked one;
+  // all 4 ticked -> refused. -> { cands (ascending), text ('' when added), added }
+  function addPageCandidate(cands, page, numPages) {
+    var list = Array.isArray(cands) ? cands.slice() : [];
+    var p = pageNumber(page);
+    if (p < 1 || !(numPages > 0) || p > numPages) return { cands: list, text: PAGE_NONE_TEXT, added: 0 };
+    if (list.some(function (c) { return c.page === p; })) return { cands: list, text: PAGE_DUP_TEXT, added: 0 };
+    if (list.length < PIC_MAX) {
+      list.push(newCand(p));
+    } else {
+      var at = -1;
+      for (var i = 0; i < list.length; i++) { if (!list[i].on) { at = i; break; } }
+      if (at < 0) return { cands: list, text: PIC_LIMIT_TEXT, added: 0 };
+      list[at] = newCand(p);
+    }
+    list.sort(function (a, b) { return a.page - b.page; });
+    return { cands: list, text: '', added: p };
+  }
+  // Tick or untick candidate i. A fifth tick is refused; a failed page cannot be ticked.
+  function tickPage(cands, i, on) {
+    var list = Array.isArray(cands) ? cands.slice() : [];
+    var c = list[i];
+    if (!c) return { cands: list, text: '' };
+    if (!on) { if (c.on) list[i] = withProps(c, { on: false }); return { cands: list, text: '' }; }
+    if (c.failed || c.on) return { cands: list, text: '' };
+    if (pickedCount(list) >= PIC_MAX) return { cands: list, text: PIC_LIMIT_TEXT };
+    list[i] = withProps(c, { on: true });
+    return { cands: list, text: '' };
+  }
+  function pictureQuotaText(n) {
+    if (!(n > 0)) return '';
+    return 'จะอัปโหลดรูป ' + n + ' รูป' + (n > PIC_DAILY_CAP ? ' (เกินโควตาวันละ ' + PIC_DAILY_CAP + ' รูป)' : '');
+  }
+  // Pictures this draft saves, in page order: ticked non-failed pages with cleaned captions; a picture-file draft
+  // keeps its single picture.
+  function draftImagesPlan(d) {
+    if (!d) return [];
+    if (d.picFile) return d.attachPic ? [{ file: true, caption: captionClean(d.caption) }] : [];
+    return (Array.isArray(d.cands) ? d.cands : []).filter(function (c) { return c.on && !c.failed; })
+      .sort(function (a, b) { return a.page - b.page; })
+      .map(function (c) { return { page: c.page, caption: captionClean(c.caption) }; });
+  }
+  // Ticked pictures counted for the daily quota across the drafts that will be saved.
+  function pictureCountForQuota(drafts) {
+    var n = 0;
+    (Array.isArray(drafts) ? drafts : []).forEach(function (d) {
+      if (d && d.include && d.status !== 'saved') n += missingUploads(draftImagesPlan(d), d.uploads).length;
+    });
+    return n;
+  }
+  function pagesDroppedText(pages) {
+    return Array.isArray(pages) && pages.length ? 'บันทึกแล้ว แต่แนบหน้า ' + pages.join(', ') + ' ไม่ได้' : '';
+  }
+  // Rejects with an Error (timeout = true) when the promise has not settled within ms; the timer is always cleared.
+  function raceTimeout(promise, ms, tag) {
+    return new Promise(function (resolve, reject) {
+      var done = false;
+      var t = setTimeout(function () {
+        if (done) return;
+        done = true;
+        var e = new Error(tag || 'timeout');
+        e.timeout = true;
+        reject(e);
+      }, ms);
+      Promise.resolve(promise).then(function (v) { if (!done) { done = true; clearTimeout(t); resolve(v); } },
+        function (e) { if (!done) { done = true; clearTimeout(t); reject(e); } });
+    });
+  }
+  // Resolves when every promise has settled or after ms, whichever comes first. Never rejects.
+  function settleWithin(list, ms) {
+    var all = Promise.all((Array.isArray(list) ? list : []).map(function (p) { return Promise.resolve(p).then(function () {}, function () {}); }));
+    return raceTimeout(all, Math.max(0, ms), 'wait').then(function () {}, function () {});
+  }
+  // Uploads already done for a draft: { "<page>": { imageId, width, height } }. Keep only pages the plan still wants.
+  function pruneUploads(uploads, plan) {
+    var out = {};
+    var src = uploads && typeof uploads === 'object' ? uploads : {};
+    (Array.isArray(plan) ? plan : []).forEach(function (it) {
+      if (it && it.page && src[it.page]) out[it.page] = src[it.page];
+    });
+    return out;
+  }
+  // Plan items (draftImagesPlan) that still need image.begin and PUTs.
+  function missingUploads(plan, uploads) {
+    var src = uploads && typeof uploads === 'object' ? uploads : {};
+    return (Array.isArray(plan) ? plan : []).filter(function (it) { return !(it && it.page && src[it.page] && src[it.page].imageId); });
+  }
+  // The images for article.create, in plan order, from the upload cache.
+  function imagesFromUploads(plan, uploads) {
+    var src = uploads && typeof uploads === 'object' ? uploads : {};
+    return (Array.isArray(plan) ? plan : []).map(function (it) {
+      var u = src[it.page];
+      return { imageId: u.imageId, caption: it.caption, width: u.width, height: u.height };
+    });
+  }
+  // After the daily limit was hit: a draft that would upload more pictures stays unsaved, the rest are still saved.
+  function blockedByLimit(d) {
+    return !!d && missingUploads(draftImagesPlan(d), d.uploads).length > 0;
+  }
+  // Checkbox text for a candidate page: its position in the file, plus the printed label when it differs.
+  function pageLabelText(page, label) {
+    var t = 'แนบหน้าลำดับที่ ' + page + ' ในไฟล์ PDF';
+    var l = typeof label === 'string' ? label.trim() : '';
+    return l && l !== String(page) ? t + ' (เลขหน้าในเอกสาร ' + l + ')' : t;
+  }
   // END PURE
 
   var ICONS = {
@@ -1001,7 +1239,9 @@
     fDelete: byId('fDelete'), fNote: byId('fNote'),
     pdfBtn: byId('pdfBtn'), pdfFile: byId('pdfFile'), pdfNote: byId('pdfNote'), pdfPanel: byId('pdfPanel'),
     pdfSummary: byId('pdfSummary'), pdfCards: byId('pdfCards'), pdfSave: byId('pdfSave'), pdfCancel: byId('pdfCancel'),
-    pdfSaveNote: byId('pdfSaveNote'), pdfFailed: byId('pdfFailed'), pdfKind: byId('pdfKind'), pdfKindWrap: byId('pdfKindWrap')
+    pdfSaveNote: byId('pdfSaveNote'), pdfFailed: byId('pdfFailed'), pdfKind: byId('pdfKind'), pdfKindWrap: byId('pdfKindWrap'),
+    pdfRender: byId('pdfRender'), pdfRetry: byId('pdfRetry'), pdfQuota: byId('pdfQuota'),
+    picView: byId('draftPicView'), picViewImg: byId('draftPicImg'), picViewLabel: byId('draftPicLabel'), picViewClose: byId('draftPicClose')
   };
 
   var state = {
@@ -1722,34 +1962,47 @@
     return canvas;
   }
   function shrinkFail(text) { var e = new Error('shrink'); e.text = text; return e; }
-  // File -> { main: Blob, thumb: Blob, width, height } (JPEG, EXIF dropped by re-encoding).
+  function zeroCanvas(c) { if (c) { c.width = 0; c.height = 0; } }
+  // Any drawable source (decoded bitmap, image or canvas) -> { main: Blob, thumb: Blob, width, height }
+  // (JPEG, EXIF dropped by re-encoding). Every canvas made here is zeroed before returning.
+  function shrinkSource(source, w, h) {
+    var made = [];
+    var best = null;
+    function attempt(tried, bytes) {
+      var plan = shrinkPlan(w, h, bytes, tried);
+      if (plan.ok) return best;
+      if (plan.fail) throw shrinkFail(plan.text);
+      var canvas = drawScaled(source, w, h, plan.side);
+      made.push(canvas);
+      return canvasBlob(canvas, plan.quality).then(function (blob) {
+        best = { main: blob, canvas: canvas };
+        return attempt(tried + 1, blob.size);
+      });
+    }
+    function release() { made.forEach(zeroCanvas); }
+    return Promise.resolve().then(function () { return attempt(0, null); }).then(function (res) {
+      var width = res.canvas.width;
+      var height = res.canvas.height;
+      var tp = thumbPlan(width, height);
+      var tc = drawScaled(res.canvas, width, height, tp.side);
+      made.push(tc);
+      return canvasBlob(tc, tp.quality).then(function (thumb) {
+        return { main: res.main, thumb: thumb, width: width, height: height };
+      });
+    }).then(function (r) { release(); return r; }, function (e) { release(); throw e; });
+  }
+  // File -> { main: Blob, thumb: Blob, width, height }.
   function shrinkPicture(file) {
     return loadBitmap(file).then(function (bmp) {
-      var best = null;
-      function attempt(tried, bytes) {
-        var plan = shrinkPlan(bmp.width, bmp.height, bytes, tried);
-        if (plan.ok) return best;
-        if (plan.fail) throw shrinkFail(plan.text);
-        var canvas = drawScaled(bmp.source, bmp.width, bmp.height, plan.side);
-        return canvasBlob(canvas, plan.quality).then(function (blob) {
-          best = { main: blob, canvas: canvas };
-          return attempt(tried + 1, blob.size);
-        });
-      }
-      return Promise.resolve().then(function () { return attempt(0, null); }).then(function (res) {
-        var tp = thumbPlan(res.canvas.width, res.canvas.height);
-        var tc = drawScaled(res.canvas, res.canvas.width, res.canvas.height, tp.side);
-        return canvasBlob(tc, tp.quality).then(function (thumb) {
-          return { main: res.main, thumb: thumb, width: res.canvas.width, height: res.canvas.height };
-        });
-      }).then(function (r) { bmp.close(); return r; }, function (e) { bmp.close(); throw e; });
+      return shrinkSource(bmp.source, bmp.width, bmp.height).then(function (r) { bmp.close(); return r; }, function (e) { bmp.close(); throw e; });
     }, function () { throw shrinkFail(PIC_READ_FAIL_TEXT); });
   }
   function putBlob(url, blob) {
     if (!isUploadUrlOk(url, SUPABASE_URL)) { var bad = new Error('upload url'); bad.putFail = true; return Promise.reject(bad); }
-    return fetch(url, { method: 'PUT', headers: { 'content-type': 'image/jpeg' }, body: blob, cache: 'no-store' }).then(function (resp) {
+    // A PUT that never answers must not keep the save (and the disabled Cancel button) waiting forever.
+    return raceTimeout(fetch(url, { method: 'PUT', headers: { 'content-type': 'image/jpeg' }, body: blob, cache: 'no-store' }), PUT_TIMEOUT_MS, 'put timeout').then(function (resp) {
       if (!resp.ok) { var e = new Error('put ' + resp.status); e.putFail = true; throw e; }
-    }, function () { var e2 = new Error('put network'); e2.putFail = true; throw e2; });
+    }, function (er) { if (er && er.putFail) throw er; var e2 = new Error('put network'); e2.putFail = true; throw e2; });
   }
   // Shrink, image.begin and the two PUTs for one picture. -> { imageId, width, height }
   function uploadOnePicture(file) {
@@ -1894,6 +2147,421 @@
     });
   }
 
+  // ---------- PDF page pictures (runtime) ----------
+  var pdfjsPromise = null;
+  var pdfjsWorkerUrl = '';
+  function mockFlag(name) { return window.__pqaMock === true && /[?&]mockrole=/.test(window.location.search) && new RegExp('[?&]' + name + '=1(&|$)').test(window.location.search); }
+  // Loads pdf.js once (single flight). Nothing unverified is ever run: the script carries an SRI hash and the worker
+  // is fetched with an integrity check, then started from a same-origin blob. A failure resets so it can be retried.
+  function loadPdfJs() {
+    if (window.__pqaMock === true && window.pdfjsLib && window.pdfjsLib.version === PDFJS.version) return Promise.resolve(window.pdfjsLib);
+    if (mockFlag('nopdfjs')) return Promise.reject(new Error('nopdfjs'));
+    if (pdfjsPromise) return pdfjsPromise;
+    var script = null;
+    var p = new Promise(function (resolve, reject) {
+      var settled = false;
+      var timer = setTimeout(function () { if (!settled) { settled = true; reject(new Error('timeout')); } }, LIB_TIMEOUT_MS);
+      script = document.createElement('script');
+      script.src = PDFJS.libUrl;
+      script.integrity = PDFJS.libSri;
+      script.crossOrigin = 'anonymous';
+      script.referrerPolicy = 'no-referrer';
+      script.onload = function () { if (!settled) { settled = true; clearTimeout(timer); resolve(); } };
+      script.onerror = function () { if (!settled) { settled = true; clearTimeout(timer); reject(new Error('script')); } };
+      document.head.appendChild(script);
+    }).then(function () {
+      var lib = window.pdfjsLib;
+      if (!lib || lib.version !== PDFJS.version) throw new Error('version');
+      return fetch(PDFJS.workerUrl, { integrity: PDFJS.workerSri, mode: 'cors', credentials: 'omit', referrerPolicy: 'no-referrer' }).then(function (resp) {
+        if (!resp.ok) throw new Error('worker ' + resp.status);
+        return resp.blob();
+      }).then(function (b) {
+        pdfjsWorkerUrl = URL.createObjectURL(new Blob([b], { type: 'text/javascript' }));
+        lib.GlobalWorkerOptions.workerSrc = pdfjsWorkerUrl;
+        return lib;
+      });
+    }).then(null, function (e) {
+      pdfjsPromise = null;
+      if (script && script.parentNode) script.parentNode.removeChild(script);
+      throw e;
+    });
+    pdfjsPromise = p;
+    return p;
+  }
+  function pdfKey(fi, page) { return fi + ':' + page; }
+  function entryOf(pdf, d, page) { return pdf.rt.cache[pdfKey(d.fileIdx, page)] || null; }
+  function getEntry(pdf, fi, page) {
+    var key = pdfKey(fi, page);
+    var e = pdf.rt.cache[key];
+    if (e) return e;
+    e = { status: 'wait', err: '', errKind: '', main: null, thumb: null, width: 0, height: 0, thumbUrl: '', fullUrl: '', ready: null, settle: null };
+    e.ready = new Promise(function (resolve) { e.settle = resolve; });
+    pdf.rt.cache[key] = e;
+    return e;
+  }
+  function settleEntry(e, res, errText, kind) {
+    if (e.status !== 'wait') return;
+    if (res) {
+      e.status = 'ready';
+      e.main = res.main; e.thumb = res.thumb; e.width = res.width; e.height = res.height;
+      try { e.thumbUrl = URL.createObjectURL(res.thumb); } catch (x) { e.thumbUrl = ''; }
+    } else {
+      e.status = 'failed';
+      e.err = errText || PAGE_FAIL_TEXT;
+      e.errKind = kind || 'page';
+    }
+    e.settle(e);
+  }
+  function openPdfDoc(fo, lib) {
+    return fo.pdfFile.arrayBuffer().then(function (buf) {
+      var task = lib.getDocument({ data: new Uint8Array(buf), isEvalSupported: false, enableXfa: false, useSystemFonts: true });
+      // A file that never opens (hostile or huge) must not hold the render chain: give up after OPEN_TIMEOUT_MS and
+      // always destroy the loading task when opening fails, so its worker does not stay alive.
+      return raceTimeout(task.promise, OPEN_TIMEOUT_MS, 'open').then(null, function (e) {
+        try { var r = task.destroy(); if (r && typeof r.then === 'function') r.then(noopFn, noopFn); } catch (x) { /* ignore */ }
+        throw e;
+      });
+    });
+  }
+  function destroyDoc(doc) { if (doc) { try { doc.destroy(); } catch (e) { /* ignore */ } } }
+  // One page -> { main, thumb, width, height }; canvas only, zeroed afterwards, page cleaned up.
+  function renderOnePage(doc, pageNo) {
+    var canvas = null;
+    var pageObj = null;
+    function release() {
+      zeroCanvas(canvas);
+      if (pageObj) { try { pageObj.cleanup(); } catch (e) { /* ignore */ } }
+    }
+    var renderTask = null;
+    // getPage, render and the shrink step all share one PAGE_TIMEOUT_MS timer.
+    var work = doc.getPage(pageNo).then(function (pg) {
+      pageObj = pg;
+      var v1 = pg.getViewport({ scale: 1 });
+      var vp = pg.getViewport({ scale: pageRenderScale(v1.width, v1.height) });
+      canvas = document.createElement('canvas');
+      canvas.width = Math.max(1, Math.floor(vp.width));
+      canvas.height = Math.max(1, Math.floor(vp.height));
+      var ctx = canvas.getContext('2d');
+      ctx.fillStyle = 'white';
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+      renderTask = pg.render({ canvasContext: ctx, viewport: vp, background: 'white' });
+      return renderTask.promise;
+    }).then(function () {
+      return shrinkSource(canvas, canvas.width, canvas.height);
+    });
+    return raceTimeout(work, PAGE_TIMEOUT_MS, 'page').then(function (r) { release(); return r; }, function (e) {
+      if (e && e.timeout && renderTask) { try { renderTask.cancel(); } catch (x) { /* ignore */ } }
+      release();
+      throw e;
+    });
+  }
+  function enqueueRender(pdf, job) {
+    pdf.rt.chain = pdf.rt.chain.then(function () { return pdf.rt.closed ? null : job(); }).then(null, noopFn);
+    return pdf.rt.chain;
+  }
+  // Opens the file once and renders the listed pages one at a time. Every entry it was given ends up settled.
+  function renderPages(pdf, fi, pages, lib) {
+    var rt = pdf.rt;
+    var fo = pdf.files[fi];
+    var todo = pages.filter(function (p) { var e = rt.cache[pdfKey(fi, p)]; return e && e.status === 'wait'; });
+    if (!todo.length) return Promise.resolve();
+    var doc = null;
+    function failRest(text, kind) {
+      todo.forEach(function (p) { settleEntry(rt.cache[pdfKey(fi, p)], null, text, kind); });
+    }
+    return openPdfDoc(fo, lib).then(function (d) {
+      doc = d;
+      fo.numPages = d.numPages;
+      fo.numPagesKnown = true;
+      readPageLabels(fo, d, pdf);
+      var chain = Promise.resolve();
+      var stuck = 0;
+      todo.forEach(function (p) {
+        chain = chain.then(function () {
+          var e = rt.cache[pdfKey(fi, p)];
+          if (rt.closed || !e || e.status !== 'wait') return null;
+          if (p > doc.numPages) { settleEntry(e, null, PAGE_NONE_TEXT, 'page'); paintPdfAll(pdf); return null; }
+          // Two pages in a row that time out mean the worker is stuck: stop here, the rest fail below.
+          if (stuck >= 2) return null;
+          return renderOnePage(doc, p).then(function (res) { stuck = 0; settleEntry(e, res, '', ''); }, function (err) {
+            stuck = err && err.timeout ? stuck + 1 : 0;
+            settleEntry(e, null, err && err.text ? err.text : PAGE_FAIL_TEXT, 'page');
+          }).then(function () { paintPdfAll(pdf); });
+        });
+      });
+      return chain;
+    }, function () { fo.fileFail = true; failRest(PDF_FILE_FAIL_TEXT, 'file'); }).then(null, function () { failRest(PAGE_FAIL_TEXT, 'page'); })
+      .then(function () { destroyDoc(doc); failRest(PAGE_FAIL_TEXT, 'page'); paintPdfAll(pdf); });
+  }
+  // Printed page labels (optional, shown beside the position in the file); a failure just means no labels.
+  function readPageLabels(fo, doc, pdf) {
+    try {
+      if (!doc || typeof doc.getPageLabels !== 'function') return;
+      var pr = doc.getPageLabels();
+      if (!pr || typeof pr.then !== 'function') return;
+      pr.then(function (labels) {
+        if (Array.isArray(labels)) { fo.labels = labels; paintPdfAll(pdf); }
+      }, noopFn);
+    } catch (e) { /* ignore */ }
+  }
+  function onLibFail(pdf) {
+    var rt = pdf.rt;
+    if (rt.closed) return;
+    rt.libFail = true;
+    pdf.drafts.forEach(function (d) {
+      (d.cands || []).forEach(function (c) { if (c.libOn === undefined) c.libOn = c.on; c.on = false; });
+    });
+    Object.keys(rt.cache).forEach(function (k) { settleEntry(rt.cache[k], null, PAGE_FAIL_TEXT, 'lib'); });
+    els.pdfRetry.hidden = false;
+    paintPdfAll(pdf);
+  }
+  function ensureLib(pdf) {
+    return loadPdfJs().then(null, function (e) { onLibFail(pdf); throw e; });
+  }
+  // Creates entries for every planned page and renders the ones still waiting, file by file in screen order.
+  function planAndRender(pdf) {
+    var rt = pdf.rt;
+    if (rt.closed || rt.libFail) { paintPdfAll(pdf); return; }
+    var plan = renderPlan(pdf.files);
+    plan.skipped.forEach(function (s) {
+      if (rt.cache[pdfKey(s.fileIdx, s.page)]) return;
+      settleEntry(getEntry(pdf, s.fileIdx, s.page), null, s.reason === 'batch' ? PLAN_BATCH_TEXT : PLAN_FILE_TEXT, 'cap');
+    });
+    var byFile = {};
+    plan.items.forEach(function (it) {
+      getEntry(pdf, it.fileIdx, it.page);
+      (byFile[it.fileIdx] = byFile[it.fileIdx] || []).push(it.page);
+    });
+    paintPdfAll(pdf);
+    var fis = Object.keys(byFile);
+    if (!fis.length) return;
+    ensureLib(pdf).then(function (lib) {
+      fis.forEach(function (fi) {
+        enqueueRender(pdf, function () { return renderPages(pdf, Number(fi), byFile[fi], lib); });
+      });
+    }, noopFn);
+  }
+  // The page count of a file whose server reply did not give one: open it once and read numPages.
+  function ensureNumPages(pdf, fi) {
+    var fo = pdf.files[fi];
+    if (!fo || fo.numPagesKnown || fo.fileFail) return;
+    ensureLib(pdf).then(function (lib) {
+      enqueueRender(pdf, function () {
+        if (fo.numPagesKnown) return null;
+        return openPdfDoc(fo, lib).then(function (d) { fo.numPages = d.numPages; fo.numPagesKnown = true; destroyDoc(d); }, function () { fo.fileFail = true; }).then(function () { paintPdfAll(pdf); });
+      });
+    }, noopFn);
+  }
+  function retryPdfLib() {
+    var pdf = state.pdf;
+    if (!pdf || !pdf.rt.libFail) return;
+    var rt = pdf.rt;
+    rt.libFail = false;
+    els.pdfRetry.hidden = true;
+    pdf.drafts.forEach(function (d) {
+      (d.cands || []).forEach(function (c) {
+        var e = rt.cache[pdfKey(d.fileIdx, c.page)];
+        if (e && e.errKind === 'lib') { c.failed = false; delete rt.cache[pdfKey(d.fileIdx, c.page)]; }
+        if (c.libOn !== undefined) { c.on = c.libOn && !c.failed; delete c.libOn; }
+      });
+    });
+    planAndRender(pdf);
+  }
+  function syncCands(pdf, d) {
+    (d.cands || []).forEach(function (c) {
+      var e = entryOf(pdf, d, c.page);
+      if (!c.failed && e && e.status === 'failed') { c.failed = true; c.on = false; }
+    });
+  }
+  function paintRenderStatus(pdf) {
+    if (pdf.rt.libFail) { setNote(els.pdfRender, PDF_LIB_FAIL_TEXT, 'err'); return; }
+    var total = 0;
+    var done = 0;
+    Object.keys(pdf.rt.cache).forEach(function (k) {
+      var e = pdf.rt.cache[k];
+      if (e.errKind === 'cap') return;
+      total++;
+      if (e.status !== 'wait') done++;
+    });
+    setNote(els.pdfRender, total > done ? 'กำลังเตรียมภาพจาก PDF ' + done + ' / ' + total + ' หน้า' : '', '');
+  }
+  function pgNote(d, text, tone) { if (d.ui && d.ui.pgNote) setNote(d.ui.pgNote, text, tone); }
+  function paintCands(d) {
+    var pdf = state.pdf;
+    if (!pdf || !d.ui || !d.ui.pgRows) return;
+    var fo = pdf.files[d.fileIdx];
+    var libFail = pdf.rt.libFail;
+    var editable = pdf.phase === 'review' && d.status !== 'saved';
+    syncCands(pdf, d);
+    d.cands.forEach(function (c) {
+      var u = c.ui;
+      if (!u) return;
+      var e = entryOf(pdf, d, c.page);
+      var shown = e ? e.status + ':' + e.err : 'none';
+      if (u.shown !== shown) {
+        u.shown = shown;
+        clear(u.thumb);
+        if (e && e.status === 'ready' && e.thumbUrl) {
+          var img = add(u.thumb, 'img');
+          img.alt = 'หน้า ' + c.page + ' จากไฟล์ ' + d.fileName;
+          img.src = e.thumbUrl;
+        } else if (e && e.status === 'failed') {
+          u.thumb.textContent = e.err || PAGE_FAIL_TEXT;
+        } else if (libFail || c.failed) {
+          u.thumb.textContent = PAGE_FAIL_TEXT;
+        } else {
+          u.thumb.textContent = 'กำลังเตรียมภาพ...';
+        }
+      }
+      u.tick.checked = c.on;
+      if (u.tickText) {
+        var lt = pageLabelText(c.page, fo && Array.isArray(fo.labels) ? fo.labels[c.page - 1] : '');
+        if (u.tickText.textContent !== lt) u.tickText.textContent = lt;
+      }
+      u.tick.disabled = !editable || c.failed || libFail;
+      u.cap.disabled = !editable || !c.on;
+      u.view.disabled = !(e && e.status === 'ready');
+    });
+    d.ui.pgCount.textContent = picCounterText(pickedCount(d.cands));
+    var numPages = fo ? fo.numPages : 0;
+    var room = d.cands.length < PIC_MAX || d.cands.some(function (c) { return !c.on; });
+    var addOff = !editable || libFail || !(numPages > 0) || !!(fo && fo.fileFail) || !room;
+    d.ui.pgNum.disabled = addOff;
+    d.ui.pgAdd.disabled = addOff;
+    if (fo && fo.numPagesKnown && numPages > 0) d.ui.pgNum.max = String(numPages);
+    d.ui.libNote.hidden = !(libFail && (d.cands.length > 0 || d.ui.pgBox.open));
+    d.ui.fileNote.hidden = !(fo && fo.fileFail && !libFail);
+  }
+  function paintPdfAll(pdf) {
+    if (state.pdf !== pdf) return;
+    pdf.drafts.forEach(paintCands);
+    paintRenderStatus(pdf);
+    refreshPdfButtons();
+  }
+  function findCand(d, page) {
+    for (var i = 0; i < d.cands.length; i++) { if (d.cands[i].page === page) return i; }
+    return -1;
+  }
+  function showFullPage(d, c, opener) {
+    var pdf = state.pdf;
+    var e = pdf ? entryOf(pdf, d, c.page) : null;
+    if (!e || e.status !== 'ready' || !els.picView || typeof els.picView.showModal !== 'function') return;
+    if (!e.fullUrl) { try { e.fullUrl = URL.createObjectURL(e.main); } catch (x) { e.fullUrl = ''; } }
+    if (!e.fullUrl) return;
+    els.picViewImg.src = e.fullUrl;
+    els.picViewImg.alt = 'หน้า ' + c.page + ' จากไฟล์ ' + d.fileName;
+    els.picViewLabel.textContent = 'หน้า ' + c.page;
+    els.picView.returnFocusTo = opener;
+    els.picView.showModal();
+    els.picViewClose.focus();
+  }
+  function buildCandRow(d, c) {
+    var pdf = state.pdf;
+    var u = {};
+    c.ui = u;
+    var row = add(d.ui.pgRows, 'div', 'pg-row');
+    u.thumb = add(row, 'div', 'pic-thumb');
+    var main = add(row, 'div', 'pic-main');
+    var idp = 'dPg' + d.idx + '_' + c.page;
+    var lbl = add(main, 'label', 'pic-check');
+    u.tick = add(lbl, 'input');
+    u.tick.type = 'checkbox';
+    u.tick.id = idp;
+    u.tick.checked = c.on;
+    u.tickText = add(lbl, 'span', '', pageLabelText(c.page, ''));
+    var cl = add(main, 'label', 'lbl', 'คำบรรยายรูป (ไม่บังคับ)');
+    u.cap = add(main, 'input', 'input');
+    u.cap.type = 'text';
+    u.cap.id = idp + 'c';
+    u.cap.autocomplete = 'off';
+    u.cap.value = c.caption;
+    cl.htmlFor = u.cap.id;
+    u.capCounter = add(main, 'div', 'counter');
+    u.capCounter.id = idp + 'n';
+    u.cap.setAttribute('aria-describedby', u.capCounter.id);
+    function paintCap() { paintCounter(u.capCounter, counterText(captionLength(c.caption), CAPTION_MAX), counterTone(captionLength(c.caption), CAPTION_MAX)); }
+    paintCap();
+    u.view = btn(main, 'ดูภาพเต็ม', 'alt', function () { showFullPage(d, c, u.view); });
+    u.view.setAttribute('aria-label', 'ดูภาพเต็ม หน้า ' + c.page);
+    if (!els.picView || typeof els.picView.showModal !== 'function') u.view.hidden = true;
+    u.tick.addEventListener('change', function () {
+      var ci = findCand(d, c.page);
+      var r = tickPage(d.cands, ci, u.tick.checked);
+      d.cands = r.cands;
+      // Any change of the tick for this page throws away a picture already uploaded for it.
+      if (d.uploads) delete d.uploads[c.page];
+      pgNote(d, r.text, r.text ? 'warn' : '');
+      paintPdfAll(pdf);
+    });
+    u.cap.addEventListener('input', function () {
+      var cur = d.cands[findCand(d, c.page)];
+      if (cur) cur.caption = u.cap.value;
+      c.caption = u.cap.value;
+      paintCap();
+      markField(u.cap, false);
+    });
+  }
+  function buildCandRows(d) {
+    clear(d.ui.pgRows);
+    d.cands.forEach(function (c) { buildCandRow(d, c); });
+  }
+  function addPageClick(d) {
+    var pdf = state.pdf;
+    var fo = pdf ? pdf.files[d.fileIdx] : null;
+    if (!pdf || !fo) return;
+    // Until pdf.js has opened the file, the server's count is only a hint: accept up to the hard maximum and let the
+    // renderer mark a page that is not in the file.
+    var r = addPageCandidate(d.cands, d.ui.pgNum.value, fo.numPagesKnown ? fo.numPages : DRAFT_PAGE_POS_MAX);
+    if (r.text) { pgNote(d, r.text, 'warn'); return; }
+    pgNote(d, '', '');
+    d.cands = r.cands;
+    d.ui.pgNum.value = '';
+    buildCandRows(d);
+    planAndRender(pdf);
+    paintPdfAll(pdf);
+    var ni = findCand(d, r.added);
+    if (ni >= 0 && d.cands[ni].ui) d.cands[ni].ui.tick.focus();
+  }
+  // The "pictures from PDF pages" block of one PDF draft (open when pages are proposed, a closed <details> otherwise).
+  function buildPagesBlock(card, d) {
+    var pdf = state.pdf;
+    var ui = d.ui;
+    var has = d.cands.length > 0;
+    var box = has ? add(card, 'div', 'draft-pages') : add(card, 'details', 'draft-pages');
+    ui.pgBox = box;
+    if (has) add(box, 'h4', '', 'ภาพจากหน้า PDF (แนบได้ไม่เกิน ' + PIC_MAX + ' รูป)');
+    else add(box, 'summary', '', 'แนบภาพจากหน้า PDF');
+    add(box, 'p', 'note', PIC_REMINDER);
+    add(box, 'p', 'note warn', PAGE_WARN_TEXT);
+    ui.libNote = add(box, 'p', 'note err', PDF_LIB_FAIL_TEXT);
+    ui.libNote.hidden = true;
+    ui.fileNote = add(box, 'p', 'note err', PDF_FILE_FAIL_TEXT);
+    ui.fileNote.hidden = true;
+    ui.pgCount = add(box, 'p', 'counter', '');
+    ui.pgRows = add(box, 'div', 'pg-rows');
+    var addRow = add(box, 'div', 'pg-add');
+    var wrap = add(addRow, 'div');
+    var nl = add(wrap, 'label', 'lbl', PAGE_POS_LABEL);
+    ui.pgNum = add(wrap, 'input', 'input');
+    ui.pgNum.type = 'number';
+    ui.pgNum.min = '1';
+    ui.pgNum.id = 'dPgNum' + d.idx;
+    ui.pgNum.setAttribute('inputmode', 'numeric');
+    nl.htmlFor = ui.pgNum.id;
+    ui.pgAdd = btn(addRow, 'เพิ่ม', 'alt', function () { addPageClick(d); });
+    ui.pgAdd.setAttribute('aria-label', 'เพิ่มหน้านี้เป็นรูป');
+    ui.pgNum.addEventListener('keydown', function (ev) { if (ev.key === 'Enter') { ev.preventDefault(); addPageClick(d); } });
+    ui.pgNote = add(box, 'p', 'note', '');
+    ui.pgNote.setAttribute('role', 'status');
+    buildCandRows(d);
+    if (!has) {
+      box.addEventListener('toggle', function () {
+        if (!box.open || !state.pdf || state.pdf !== pdf) return;
+        ensureLib(pdf).then(function () { ensureNumPages(pdf, d.fileIdx); paintPdfAll(pdf); }, noopFn);
+      });
+    }
+  }
+
   // ---------- PDF drafts ----------
   function pdfBusy(on) {
     els.pdfBtn.disabled = on;
@@ -1952,7 +2620,7 @@
       }).then(function (reply) {
         var r = normalizeDraftReply(reply);
         if (!r.drafts.length) failed.push({ name: name, text: PDF_EMPTY_TEXT });
-        else files.push({ name: name, mime: item.mime, kind: kind, picture: item.mime !== 'application/pdf' ? item.file : null, picUrl: '', pageCount: item.mime === 'application/pdf' ? r.pageCount : 0, costUsd: r.costUsd, drafts: r.drafts });
+        else files.push({ name: name, mime: item.mime, kind: kind, picture: item.mime !== 'application/pdf' ? item.file : null, pdfFile: item.mime === 'application/pdf' ? item.file : null, numPages: 0, fileFail: false, picUrl: '', pageCount: item.mime === 'application/pdf' ? r.pageCount : 0, costUsd: r.costUsd, drafts: r.drafts });
         next();
       }, function (err) {
         var status = err && typeof err.status === 'number' ? err.status : 500;
@@ -1989,10 +2657,14 @@
     ui.errNote.textContent = d.err || '';
     ui.errNote.className = 'note ' + (d.status === 'failed' ? 'err' : 'warn');
     ui.errNote.hidden = !d.err;
+    paintCands(d);
   }
   function refreshPdfButtons() {
     var pdf = state.pdf;
     if (!pdf) return;
+    var q = pdf.phase === 'done' ? 0 : pictureCountForQuota(pdf.drafts);
+    els.pdfQuota.hidden = q <= 0;
+    setNote(els.pdfQuota, pictureQuotaText(q), q > PIC_DAILY_CAP ? 'warn' : '');
     var n = selectedDraftCount(pdf.drafts);
     els.pdfSave.textContent = draftSaveLabel(n);
     els.pdfSave.disabled = pdf.phase !== 'review' || n === 0;
@@ -2003,6 +2675,7 @@
   function buildDraftCard(d, i) {
     var ui = {};
     d.ui = ui;
+    d.idx = i;
     var card = add(els.pdfCards, 'div', 'draft');
     ui.card = card;
     var head = add(card, 'div', 'draft-head');
@@ -2076,6 +2749,8 @@
       ui.attach.addEventListener('change', function () { d.attachPic = ui.attach.checked; ui.caption.disabled = !ui.attach.checked; });
       ui.caption.addEventListener('input', function () { d.caption = ui.caption.value; paintCap(); markField(ui.caption, false); });
     }
+    var ownFile = state.pdf ? state.pdf.files[d.fileIdx] : null;
+    if (!d.picFile && ownFile && ownFile.mime === 'application/pdf') buildPagesBlock(card, d);
     add(card, 'p', 'src', sourceLine(d.pages, d.fileName));
     if (d.warning === 'secret') {
       var wb = add(card, 'div', 'warnbox');
@@ -2105,7 +2780,17 @@
         d.picFile = fo.picture; d.picUrl = fo.picUrl; d.attachPic = true; d.caption = '';
       }
     });
-    state.pdf = { files: files, kind: kind, drafts: drafts, phase: 'review' };
+    // pageCount from the server is a rough regex count: only a display hint. pdf.js sets the true numPages.
+    files.forEach(function (fo) { fo.numPages = fo.pageCount > 0 ? fo.pageCount : 0; fo.numPagesKnown = false; fo.labels = null; fo.fileFail = false; });
+    drafts.forEach(function (d) {
+      var fo2 = files[d.fileIdx];
+      d.uploads = {};
+      d.cands = fo2 && fo2.mime === 'application/pdf' ? candsOf(draftPicPages(d.picturePages, DRAFT_PAGE_POS_MAX)) : [];
+    });
+    state.pdf = { files: files, kind: kind, drafts: drafts, phase: 'review', limitHit: false,
+      rt: { cache: {}, chain: Promise.resolve(), libFail: false, closed: false } };
+    els.pdfRetry.hidden = true;
+    setNote(els.pdfRender, '', '');
     state.tab = 'articles';
     clear(els.pdfCards);
     els.pdfSummary.textContent = draftHeaderText(draftsTotals(files));
@@ -2121,11 +2806,29 @@
     renderTabs();
     els.pdfSummary.focus();
     try { els.pdfPanel.scrollIntoView(); } catch (e) { /* ignore */ }
+    // Rendering starts after the cards are painted; the review is usable at once.
+    if (needsPdfJs(files)) planAndRender(state.pdf);
   }
   function closePdf(refresh) {
     var counts = state.pdf ? queueCounts(state.pdf.drafts) : { saved: 0, failed: 0 };
     if (state.pdf) {
-      state.pdf.files.forEach(function (fo) { if (fo.picUrl) { try { URL.revokeObjectURL(fo.picUrl); } catch (e) { /* ignore */ } } });
+      var closing = state.pdf;
+      closing.rt.closed = true;
+      Object.keys(closing.rt.cache).forEach(function (k) {
+        var e = closing.rt.cache[k];
+        settleEntry(e, null, PAGE_FAIL_TEXT, 'page');
+        [e.thumbUrl, e.fullUrl].forEach(function (u) { if (u) { try { URL.revokeObjectURL(u); } catch (x) { /* ignore */ } } });
+        e.main = null; e.thumb = null;
+      });
+      closing.rt.cache = {};
+      if (els.picView && els.picView.open) els.picView.close();
+      els.picViewImg.removeAttribute('src');
+      els.pdfRetry.hidden = true;
+      setNote(els.pdfRender, '', '');
+      closing.files.forEach(function (fo) {
+        fo.pdfFile = null;
+        if (fo.picUrl) { try { URL.revokeObjectURL(fo.picUrl); } catch (e) { /* ignore */ } }
+      });
     }
     state.pdf = null;
     renderTabs();
@@ -2149,23 +2852,92 @@
     if (!todo.length) return;
     state.busy = true;
     pdf.phase = 'saving';
-    pdf.drafts.forEach(function (d) { markField(d.ui.title, false); markField(d.ui.body, false); markField(d.ui.tags, false); });
+    pdf.limitHit = false;
+    pdf.drafts.forEach(function (d) {
+      markField(d.ui.title, false); markField(d.ui.body, false); markField(d.ui.tags, false);
+      (d.cands || []).forEach(function (c) { if (c.ui) markField(c.ui.cap, false); });
+    });
     refreshPdfButtons();
     pdf.drafts.forEach(paintDraftState);
     var idx = 0;
+    var saveDeadline = Date.now() + SAVE_WAIT_MS;
     function finish() {
       state.busy = false;
       var c = queueCounts(pdf.drafts);
-      pdf.phase = c.failed > 0 ? 'review' : 'done';
+      pdf.phase = c.failed > 0 || pdf.limitHit ? 'review' : 'done';
       pdf.drafts.forEach(paintDraftState);
       refreshPdfButtons();
-      setNote(els.pdfSaveNote, saveSummary(c.saved, c.failed), c.failed ? 'err' : 'ok');
-      if (state.pdf === pdf) (c.failed > 0 ? els.pdfSave : els.pdfCancel).focus();
+      if (pdf.limitHit) setNote(els.pdfSaveNote, (c.saved > 0 ? 'บันทึกแล้ว ' + c.saved + ' เรื่อง · ' : '') + DAILY_LIMIT_SAVE_TEXT, 'err');
+      else setNote(els.pdfSaveNote, saveSummary(c.saved, c.failed), c.failed ? 'err' : 'ok');
+      if (state.pdf === pdf) (c.failed > 0 || pdf.limitHit ? els.pdfSave : els.pdfCancel).focus();
+    }
+    // Waits for the ticked pages, then image.begin once, then main and thumbnail PUTs per page (one retry each).
+    // -> { imgs: [{ imageId, caption, width, height }] | null, dropped: [page] }
+    function uploadPagePictures(d) {
+      var ticked = (d.cands || []).filter(function (c) { return c.on && !c.failed; });
+      // Pages are waited for only until the deadline that started with the save; a page still rendering is dropped.
+      return settleWithin(ticked.map(function (c) {
+        var e = entryOf(pdf, d, c.page);
+        var cached = d.uploads && d.uploads[c.page];
+        return e && !cached ? e.ready : Promise.resolve();
+      }), saveDeadline - Date.now()).then(function () {
+        var dropped = [];
+        ticked.forEach(function (c) {
+          var e = entryOf(pdf, d, c.page);
+          var cached = d.uploads && d.uploads[c.page];
+          if (cached) return;
+          if (!e || e.status !== 'ready') {
+            if (e && e.status === 'wait') settleEntry(e, null, PAGE_FAIL_TEXT, 'page');
+            c.failed = true; c.on = false; dropped.push(c.page);
+          }
+        });
+        dropped.sort(function (a, b) { return a - b; });
+        var plan = draftImagesPlan(d);
+        d.uploads = pruneUploads(d.uploads, plan);
+        if (!plan.length) return { imgs: null, dropped: dropped };
+        var need = missingUploads(plan, d.uploads);
+        var begun = need.length ? api(imageBeginBody(need.length)) : Promise.resolve({ uploads: [] });
+        return begun.then(function (data) {
+          var slots = data && Array.isArray(data.uploads) ? data.uploads : [];
+          if (slots.length < need.length) { var se = new Error('slots'); se.status = 500; throw se; }
+          var chain = Promise.resolve();
+          need.forEach(function (it, k) {
+            var e = entryOf(pdf, d, it.page);
+            chain = chain.then(function () {
+              return putRetry(slots[k].uploadUrl, e.main).then(function () { return putRetry(slots[k].thumbUploadUrl, e.thumb); }).then(function () {
+                // Kept on the draft: a retry after a later failure does not upload this page again.
+                d.uploads[it.page] = { imageId: slots[k].imageId, width: e.width, height: e.height };
+              });
+            });
+          });
+          return chain.then(function () { return { imgs: imagesFromUploads(plan, d.uploads), dropped: dropped }; });
+        }).then(null, function (e) {
+          var ue = new Error('draft picture');
+          ue.picFail = true;
+          ue.daily = !!(e && e.status === 429 && e.code === 'daily_limit');
+          ue.text = ue.daily ? DAILY_LIMIT_SAVE_TEXT : (e && e.putFail ? DRAFT_PIC_FAIL_TEXT : (e && typeof e.status === 'number' ? failText(e) : DRAFT_PIC_FAIL_TEXT));
+          throw ue;
+        });
+      });
+    }
+    function putRetry(url, blob) {
+      return putBlob(url, blob).then(null, function () {
+        return new Promise(function (r) { setTimeout(r, 1000); }).then(function () { return putBlob(url, blob); });
+      });
     }
     function next() {
       if (idx >= todo.length) { finish(); return; }
       var d = todo[idx++];
+      // After the daily limit answered once, a draft that needs more uploads waits for another day; the rest go on.
+      if (pdf.limitHit && blockedByLimit(d)) {
+        d.status = 'new';
+        d.err = DAILY_LIMIT_DRAFT_TEXT;
+        paintDraftState(d);
+        Promise.resolve().then(next);
+        return;
+      }
       setNote(els.pdfSaveNote, 'กำลังบันทึก ' + idx + ' / ' + todo.length, '');
+      d.err = '';
       d.status = 'saving';
       paintDraftState(d);
       var chk = draftCheck(d, d.fileName, d.kind);
@@ -2178,34 +2950,59 @@
         return;
       }
       var withPic = !!d.picFile && d.attachPic;
+      var pagePlan = d.picFile ? [] : draftImagesPlan(d);
       var capErr = withPic ? captionError(d.caption) : '';
+      var badCap = null;
+      if (!capErr && pagePlan.length) {
+        (d.cands || []).forEach(function (c) {
+          if (!badCap && c.on && !c.failed && captionError(c.caption)) { badCap = c; capErr = captionError(c.caption); }
+        });
+      }
       if (capErr) {
-        d.status = 'failed'; d.err = capErr; markField(d.ui.caption, true); paintDraftState(d);
+        d.status = 'failed'; d.err = capErr;
+        if (badCap && badCap.ui) markField(badCap.ui.cap, true);
+        else if (d.ui.caption) markField(d.ui.caption, true);
+        paintDraftState(d);
         Promise.resolve().then(next);
         return;
       }
-      var uploaded = withPic
-        ? uploadOnePicture(d.picFile).then(function (up) { up.caption = d.caption; return [up]; }, function (e) {
+      var dropped = [];
+      var uploaded;
+      if (withPic) {
+        uploaded = uploadOnePicture(d.picFile).then(function (up) { up.caption = d.caption; return [up]; }, function (e) {
           var ue = new Error('draft picture');
           ue.picFail = true;
-          ue.text = e && e.text ? e.text : (e && e.putFail ? DRAFT_PIC_FAIL_TEXT : (e && typeof e.status === 'number' ? failText(e) : DRAFT_PIC_FAIL_TEXT));
+          ue.daily = !!(e && e.status === 429 && e.code === 'daily_limit');
+          ue.text = ue.daily ? DAILY_LIMIT_SAVE_TEXT : (e && e.text ? e.text : (e && e.putFail ? DRAFT_PIC_FAIL_TEXT : (e && typeof e.status === 'number' ? failText(e) : DRAFT_PIC_FAIL_TEXT)));
           throw ue;
-        })
-        : Promise.resolve(null);
+        });
+      } else if (pagePlan.length) {
+        uploaded = uploadPagePictures(d).then(function (r) { dropped = r.dropped; return r.imgs; });
+      } else {
+        uploaded = Promise.resolve(null);
+      }
       uploaded.then(function (imgs) {
         return api(articleCreateBody(chk.value, null, imgs)).then(function (data) {
           d.status = 'saved';
-          d.err = imgs ? imagesAttachedText(imgs.length, data) : '';
+          d.err = [pagesDroppedText(dropped), imgs ? imagesAttachedText(imgs.length, data) : ''].filter(Boolean).join(' · ');
         });
       }).then(null, function (err) {
-        d.status = 'failed';
-        if (err && err.picFail) {
+        var capTexts = withPic ? [d.caption] : (d.cands || []).filter(function (c) { return c.on && !c.failed; }).map(function (c) { return c.caption; });
+        if (err && err.picFail && err.daily) {
+          d.status = 'new';
+          d.err = DAILY_LIMIT_DRAFT_TEXT;
+          pdf.limitHit = true;
+        } else if (err && err.picFail) {
+          d.status = 'failed';
           d.err = err.text;
         } else if (err && isSecretError(err.status, err.code)) {
+          d.status = 'failed';
           d.err = SECRET_TEXT;
-          markDraftFields(d, secretFields(d.title, d.body, withPic ? [d.caption] : []));
+          markDraftFields(d, secretFields(d.title, d.body, capTexts));
           if (withPic && looksSecret(d.caption)) markField(d.ui.caption, true);
+          (d.cands || []).forEach(function (c) { if (c.on && c.ui && looksSecret(c.caption)) markField(c.ui.cap, true); });
         } else {
+          d.status = 'failed';
           d.err = failText(err);
         }
       }).then(function () {
@@ -2400,6 +3197,14 @@
   els.pdfBtn.addEventListener('click', function () { if (!state.busy) els.pdfFile.click(); });
   els.pdfFile.addEventListener('change', onPdfChosen);
   els.pdfSave.addEventListener('click', savePdfDrafts);
+  els.pdfRetry.addEventListener('click', retryPdfLib);
+  els.picViewClose.addEventListener('click', function () { els.picView.close(); });
+  els.picView.addEventListener('close', function () {
+    els.picViewImg.removeAttribute('src');
+    var back = els.picView.returnFocusTo;
+    els.picView.returnFocusTo = null;
+    if (back && document.body.contains(back)) back.focus();
+  });
   els.pdfCancel.addEventListener('click', cancelPdf);
   els.logMore.addEventListener('click', function () { loadLog(false); });
   els.editorAdd.addEventListener('click', addEditor);

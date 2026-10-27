@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>ถามสินค้า / IT</title>
+<title>ผู้ช่วยสาขา</title>
 <link rel="stylesheet" href="pqa-theme.css?v=1">
 <style>
   /* Page layout only. Colours, fonts, radii, spacing and focus come from pqa-theme.css tokens. */
@@ -81,6 +81,15 @@
   .topic-btn:hover { background: var(--c-brand-soft); border-color: var(--c-brand); }
   .topic-btn:disabled { opacity: 0.55; cursor: not-allowed; }
   .topic-btn svg { width: var(--size-icon-s); height: var(--size-icon-s); }
+  #boWrap { position: relative; }
+  #boBtn::after { content: ' ▾'; }
+  #boMenu {
+    position: absolute; right: 0; top: 100%; z-index: 6; min-width: 16rem; margin-top: var(--space-1);
+    background: var(--c-surface); border: 1px solid var(--c-line-strong); border-radius: var(--radius-m);
+    box-shadow: var(--shadow-1); padding: var(--space-1); display: flex; flex-direction: column;
+  }
+  #boMenu a { display: block; min-height: var(--size-target); line-height: var(--size-target); border-radius: var(--radius-s); padding: 0 var(--space-3); font-size: var(--fs-s); color: var(--c-ink); text-decoration: none; }
+  #boMenu a:hover { background: var(--c-brand-soft); }
   .topic-menu {
     position: absolute; left: 0; top: 100%; z-index: 5; min-width: calc(var(--size-field)); margin-top: var(--space-1);
     background: var(--c-surface); border: 1px solid var(--c-line-strong); border-radius: var(--radius-m);
@@ -284,14 +293,15 @@
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/><path d="M9.5 9a2.5 2.5 0 0 1 5 0c0 1.5-2.5 2-2.5 3.5"/><path d="M12 15h.01"/></svg>
     </div>
     <div class="title">
-      <h1>ถามสินค้า / IT</h1>
-      <p>ตอบจากเอกสารสินค้าและบทความของทีมไอทีเท่านั้น</p>
+      <h1>ผู้ช่วยสาขา</h1>
+      <p>ถามสินค้า ไอที บุคคล และอื่นๆ ตอบจากเอกสารและบทความของทีมงาน</p>
     </div>
     <div id="who"></div>
     <button type="button" id="mineBtn" class="top-link" aria-haspopup="dialog" hidden>คำถามของฉัน</button>
-    <a id="kbLink" class="top-link" href="kb.html" hidden>จัดการความรู้ IT</a>
-    <a id="manageLink" class="top-link" href="manage.html" hidden>จัดการเอกสารสินค้า</a>
-    <a id="adminLink" class="top-link" href="admin.html" hidden>หน้าผู้ดูแล</a>
+    <div id="boWrap" hidden>
+      <button type="button" id="boBtn" class="top-link" aria-haspopup="menu" aria-expanded="false">หลังบ้าน</button>
+      <div id="boMenu" role="menu" hidden></div>
+    </div>
   </div>
 </header>
 
@@ -307,7 +317,7 @@
     <div class="comp-row">
       <button type="button" id="camBtn" class="icon-btn" aria-label="ถ่ายรูปปัญหา" title="ถ่ายรูป"></button>
       <button type="button" id="galBtn" class="icon-btn" aria-label="เลือกรูปจากเครื่อง" title="เลือกรูป"></button>
-      <textarea id="q" rows="1" maxlength="1000" enterkeyhint="send" placeholder="พิมพ์คำถาม หรือชื่อ/รหัสสินค้า หรืออาการปัญหา IT" aria-label="พิมพ์คำถาม"></textarea>
+      <textarea id="q" rows="1" maxlength="1000" enterkeyhint="send" placeholder="พิมพ์คำถาม ชื่อ/รหัสสินค้า หรืออาการปัญหา" aria-label="พิมพ์คำถาม"></textarea>
       <button type="submit" id="sendBtn" class="btn" aria-label="ส่งคำถาม"><span class="send-text">ส่ง</span></button>
     </div>
     <p id="hint" role="status"><span class="hint-keys">Enter ส่ง · Shift+Enter ขึ้นบรรทัดใหม่ · </span>แนบรูปได้ 3 รูป ใช้กับคำถาม IT</p>
@@ -411,7 +421,7 @@
   var MAX_SIDE = 1280;
   var JPEG_QUALITY = 0.8;
   var MAX_IMAGE_BYTES = 700 * 1024;
-  var TOPICS = ['auto', 'product', 'it'];
+  var TOPICS = ['auto', 'product', 'it', 'hr'];
   var NO_ARTICLE_TEXT = 'ยังไม่มีคำตอบในฐานความรู้ IT ส่งเรื่องนี้ให้ทีมไอทีแล้ว ดูสถานะได้ที่ "คำถามของฉัน"';
   var NOT_SENT_TEXT = 'ยังไม่มีคำตอบ และยังไม่ได้ส่งเรื่องให้ทีมไอที ลองส่งใหม่อีกครั้ง';
   var REDACTED_TEXT = 'ระบบซ่อนข้อมูลที่เหมือนรหัสผ่านในข้อความของคุณแล้ว';
@@ -424,7 +434,7 @@
   var PICTURE_TEXT_LABEL = 'ระบบอ่านจากรูปได้:';
 
   function reasonMessage(reason) {
-    if (reason === 'expired') return 'ลิงก์หมดอายุ กรุณากดเมนู ถามข้อมูลสินค้า ใน Job Tracker อีกครั้ง';
+    if (reason === 'expired') return 'ลิงก์หมดอายุ กรุณากดเมนู ผู้ช่วยสาขา ใน Job Tracker อีกครั้ง';
     if (reason === 'reused') return 'ลิงก์นี้ถูกใช้ไปแล้ว กรุณากดเมนูใน Job Tracker อีกครั้ง';
     if (reason === 'malformed' || reason === 'bad_signature') return 'ลิงก์ไม่ถูกต้อง กรุณากดเมนูใน Job Tracker อีกครั้ง';
     return 'ติดต่อเซิร์ฟเวอร์ไม่ได้ ลองใหม่อีกครั้ง';
@@ -573,6 +583,7 @@
   function topicLabel(topic) {
     if (topic === 'product') return 'สินค้า';
     if (topic === 'it') return 'IT knowledge';
+    if (topic === 'hr') return 'บุคคล (HR)';
     return 'อัตโนมัติ';
   }
   // Text on the label button of a reply: 'หัวข้อ: สินค้า' plus '(อัตโนมัติ)' when the system chose it.
@@ -581,6 +592,15 @@
   }
   function topicMenuItems(current) {
     return TOPICS.map(function (t) { return { value: t, label: topicLabel(t), checked: t === current }; });
+  }
+  // Back-office menu: groups of links. topics = the Topics the person edits (kb 'me'); the Product and Admin links follow the session.
+  function backOfficeGroups(sess, topics) {
+    var groups = [];
+    var ts = (Array.isArray(topics) ? topics : []).filter(function (t) { return t !== 'auto' && t !== 'product' && TOPICS.indexOf(t) !== -1; });
+    if (ts.length) groups.push({ head: 'ความรู้ที่ดูแล', items: ts.map(function (t) { return { label: topicLabel(t), href: 'kb.html?topic=' + t }; }) });
+    if (sess && sess.canManage) groups.push({ head: 'สินค้า', items: [{ label: 'จัดการเอกสารสินค้า', href: 'manage.html' }] });
+    if (sess && sess.isAdmin) groups.push({ head: 'ระบบ', items: [{ label: 'หน้าผู้ดูแล', href: 'admin.html' }] });
+    return groups;
   }
 
   // ---- product cards ----
@@ -963,7 +983,7 @@
 
   var $ = function (id) { return document.getElementById(id); };
   var els = {
-    app: $('app'), notice: $('notice'), msg: $('msg'), who: $('who'), mineBtn: $('mineBtn'), kbLink: $('kbLink'), manageLink: $('manageLink'), adminLink: $('adminLink'),
+    app: $('app'), notice: $('notice'), msg: $('msg'), who: $('who'), mineBtn: $('mineBtn'), boWrap: $('boWrap'), boBtn: $('boBtn'), boMenu: $('boMenu'),
     thread: $('thread'), threadIn: $('threadIn'), composer: $('composer'), thumbs: $('thumbs'), q: $('q'),
     send: $('sendBtn'), hint: $('hint'), cam: $('camBtn'), gal: $('galBtn'), camInput: $('camInput'), galInput: $('galInput'),
     panel: $('panel'), panelClose: $('panelClose'), panelRefresh: $('panelRefresh'), panelStatus: $('panelStatus'), panelList: $('panelList'),
@@ -1050,8 +1070,7 @@
     hideMessage();
     renderWho(sess);
     els.mineBtn.hidden = false;
-    els.manageLink.hidden = !sess.canManage;
-    els.adminLink.hidden = !sess.isAdmin;
+    renderBackOffice(sess, []);
     els.composer.hidden = false;
     if (!turns.length) renderIntro();
     els.q.focus();
@@ -1061,16 +1080,40 @@
     current = null;
     els.composer.hidden = true;
     els.mineBtn.hidden = true;
-    els.kbLink.hidden = true;
-    els.manageLink.hidden = true;
-    els.adminLink.hidden = true;
+    renderBackOffice(null, []);
     closePanel();
     showMessage(text, true);
   }
   async function checkEditor() {
     var r = await postJson('/functions/v1/kb', buildKbBody('me'), sessionHeaders());
-    if (r.status === 200 && r.data && r.data.isItEditor === true) els.kbLink.hidden = false;
+    if (r.status === 200 && r.data && Array.isArray(r.data.topics)) renderBackOffice(current, r.data.topics);
   }
+
+  // One button for every management page the person may open; the menu is rebuilt when the editable Topics arrive.
+  function renderBackOffice(sess, topics) {
+    var groups = backOfficeGroups(sess, topics);
+    els.boMenu.textContent = '';
+    els.boMenu.hidden = true;
+    els.boBtn.setAttribute('aria-expanded', 'false');
+    els.boWrap.hidden = groups.length === 0;
+    groups.forEach(function (g) {
+      addText(els.boMenu, 'div', 'menu-hint', g.head);
+      g.items.forEach(function (it) {
+        var a = addText(els.boMenu, 'a', '', it.label);
+        a.href = it.href;
+        a.setAttribute('role', 'menuitem');
+      });
+    });
+  }
+  els.boBtn.addEventListener('click', function (ev) {
+    ev.stopPropagation();
+    els.boMenu.hidden = !els.boMenu.hidden;
+    els.boBtn.setAttribute('aria-expanded', els.boMenu.hidden ? 'false' : 'true');
+  });
+  document.addEventListener('click', function (ev) {
+    if (!els.boMenu.hidden && !els.boWrap.contains(ev.target)) { els.boMenu.hidden = true; els.boBtn.setAttribute('aria-expanded', 'false'); }
+  });
+
   async function startSession() {
     els.app.hidden = false;
     var sso = getSsoParam(window.location.search);
@@ -1094,7 +1137,7 @@
       enterChat(stored);
     } else {
       clearStored();
-      lockChat('กรุณาเปิดจากเมนู ถามข้อมูลสินค้า ใน Job Tracker');
+      lockChat('กรุณาเปิดจากเมนู ผู้ช่วยสาขา ใน Job Tracker');
     }
   }
 
@@ -1104,8 +1147,8 @@
     var box = document.createElement('div');
     box.className = 'intro';
     box.appendChild(icon('chat'));
-    addText(box, 'div', 'intro-title', 'ถามได้ทั้งสินค้าและปัญหา IT');
-    addText(box, 'p', '', 'พิมพ์ชื่อหรือรหัสสินค้า หรือเล่าอาการปัญหา IT ที่สาขา แนบรูปหน้าจอได้ 3 รูป');
+    addText(box, 'div', 'intro-title', 'ถามได้ทุกเรื่องของงานสาขา');
+    addText(box, 'p', '', 'พิมพ์ชื่อหรือรหัสสินค้า เล่าอาการปัญหา IT หรือถามเรื่องบุคคล แนบรูปหน้าจอได้ 3 รูป');
     els.threadIn.appendChild(box);
   }
   function scrollToEnd() {

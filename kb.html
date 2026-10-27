@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>จัดการความรู้ IT</title>
+<title>จัดการความรู้</title>
 <link rel="stylesheet" href="pqa-theme.css?v=1">
 <style>
   /* Page layout only. Colours, fonts, radii, spacing and focus come from pqa-theme.css tokens. */
@@ -166,7 +166,7 @@
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/><path d="M9 7h7"/><path d="M9 11h5"/></svg>
     </div>
     <div class="title">
-      <h1>จัดการความรู้ IT</h1>
+      <h1 id="pageTitle">จัดการความรู้</h1>
       <p>เขียนและแก้บทความแก้ปัญหา และตอบคำถามที่ระบบยังตอบไม่ได้ มีผลกับสาขาทันที</p>
     </div>
     <div id="who"></div>
@@ -183,11 +183,12 @@
   </div>
 
   <div id="app" hidden>
-    <div id="tabs" class="tabs" role="tablist" aria-label="หมวดจัดการความรู้ IT"></div>
+    <div id="topicBar" class="tabs" role="group" aria-label="เลือกแผนก" hidden></div>
+    <div id="tabs" class="tabs" role="tablist" aria-label="หมวดจัดการความรู้"></div>
 
     <!-- Tab 1: Open Questions -->
     <section id="panel-open" class="panel" role="tabpanel" aria-labelledby="tab-open" hidden>
-      <h2 id="hOpen">คำถามรอ IT ตอบ</h2>
+      <h2 id="hOpen">คำถามรอทีมตอบ</h2>
       <div class="row">
         <div class="grow">
           <label class="lbl" for="openFilter">แสดงคำถามที่</label>
@@ -353,7 +354,7 @@
   var SECRET_TEXT = 'ห้ามใส่รหัสผ่านหรือคีย์ในบทความ';
   var LEAVE_TEXT = 'ยังมีข้อมูลที่ยังไม่ได้บันทึก ถ้าออกจากหน้านี้ข้อมูลจะหายไป';
   var NO_SESSION_TEXT = 'กรุณาเปิดจากเมนู ถามคำถาม ใน Job Tracker';
-  var NO_ACCESS_TEXT = 'หน้านี้สำหรับทีมไอทีที่ดูแลความรู้ IT เท่านั้น ถ้าต้องการสิทธิ์ ติดต่อผู้ดูแลระบบ';
+  var NO_ACCESS_TEXT = 'หน้านี้สำหรับผู้ดูแลความรู้ของแต่ละแผนกเท่านั้น ถ้าต้องการสิทธิ์ ติดต่อผู้ดูแลระบบ';
   var OLD_BROWSER_TEXT = 'เบราว์เซอร์นี้เก่าเกินไปสำหรับหน้านี้ กรุณาอัปเดตเบราว์เซอร์ หรือเปิดด้วย Chrome หรือ Edge';
   var ACTION_LABEL = {
     'article.create': 'เพิ่มบทความ', 'article.update': 'แก้บทความ', 'article.delete': 'ลบบทความ',
@@ -382,7 +383,7 @@
   function roleOf(me) {
     if (!me || typeof me !== 'object') return 'staff';
     if (me.isAdmin === true) return 'admin';
-    if (me.isItEditor === true) return 'editor';
+    if (me.isItEditor === true || (Array.isArray(me.topics) && me.topics.length > 0)) return 'editor';
     return 'staff';
   }
   function canEditKb(me) { var r = roleOf(me); return r === 'admin' || r === 'editor'; }
@@ -394,7 +395,7 @@
   }
   function roleLabel(me) {
     var r = roleOf(me);
-    return r === 'admin' ? 'ผู้ดูแลระบบ' : r === 'editor' ? 'ผู้ดูแลความรู้ IT' : 'พนักงาน';
+    return r === 'admin' ? 'ผู้ดูแลระบบ' : r === 'editor' ? 'ผู้ดูแลความรู้' : 'พนักงาน';
   }
 
   // ----- tabs and labels -----
@@ -1184,6 +1185,27 @@
     var l = typeof label === 'string' ? label.trim() : '';
     return l && l !== String(page) ? t + ' (เลขหน้าในเอกสาร ' + l + ')' : t;
   }
+  // Department Topics: a Topic key is shown by name; an unknown key shows as itself.
+  var TOPIC_NAMES = { it: 'IT knowledge', hr: 'บุคคล (HR)' };
+  var TOPIC_TEAMS = { it: 'ไอที', hr: 'บุคคล' };
+  function topicName(t) { return TOPIC_NAMES[t] || String(t); }
+  function topicTeam(t) { return TOPIC_TEAMS[t] || String(t); }
+  // The Topic to open: ?topic= when the person edits it, else their first Topic, else 'it'.
+  function pickTopic(search, allowed) {
+    var list = Array.isArray(allowed) ? allowed : [];
+    var m = /[?&]topic=([a-z0-9_]{1,20})(&|$)/.exec(String(search || ''));
+    if (m && list.indexOf(m[1]) !== -1) return m[1];
+    return list.length ? list[0] : 'it';
+  }
+  // These actions list or create inside one Topic; the rest act on a row that already has its own Topic.
+  var TOPIC_ACTIONS = ['open.list', 'article.list', 'article.create', 'pdf.draft'];
+  function withTopic(body, topic) {
+    if (!body || TOPIC_ACTIONS.indexOf(body.action) === -1) return body;
+    var out = {};
+    Object.keys(body).forEach(function (k) { out[k] = body[k]; });
+    out.topic = topic;
+    return out;
+  }
   // END PURE
 
   var ICONS = {
@@ -1221,7 +1243,7 @@
 
   function byId(id) { return document.getElementById(id); }
   var els = {
-    who: byId('who'), msg: byId('msg'), denied: byId('denied'), deniedText: byId('deniedText'), app: byId('app'),
+    who: byId('who'), pageTitle: byId('pageTitle'), topicBar: byId('topicBar'), hOpen: byId('hOpen'), msg: byId('msg'), denied: byId('denied'), deniedText: byId('deniedText'), app: byId('app'),
     oldBrowser: byId('oldBrowser'), oldBrowserText: byId('oldBrowserText'), topBar: byId('topBar'), mainBox: byId('mainBox'),
     tabs: byId('tabs'), backLink: byId('backLink'), scrim: byId('scrim'),
     panelOpen: byId('panel-open'), openFilter: byId('openFilter'), openList: byId('openList'), openNote: byId('openNote'),
@@ -1245,7 +1267,7 @@
   };
 
   var state = {
-    sess: null, me: null, tab: 'open', busy: false,
+    sess: null, me: null, topic: 'it', tab: 'open', busy: false,
     openFilter: 'waiting', openOffset: 0, openRows: [], openTotal: 0, openSeq: 0,
     articleQuery: '', articleOffset: 0, articleSeq: 0, logOffset: 0, logSeq: 0,
     loaded: { open: false, articles: false, editors: false },
@@ -1328,7 +1350,7 @@
   }
   // POST to the kb Edge Function. Resolves the JSON body on 200, rejects { status, code } otherwise.
   function api(body, timeoutMs) {
-    return post('/functions/v1/kb', body, { 'x-pqa-session': state.sess.session }, timeoutMs).then(function (r) {
+    return post('/functions/v1/kb', withTopic(body, state.topic), { 'x-pqa-session': state.sess.session }, timeoutMs).then(function (r) {
       if (r.status === 200) return r.data;
       if (r.status === 401) {
         clearStored();
@@ -3124,6 +3146,11 @@
       hideMessage();
       if (!canEditKb(me)) { showDenied(NO_ACCESS_TEXT); return; }
       els.who.textContent = (els.who.textContent ? els.who.textContent + ' · ' : '') + roleLabel(me);
+      state.topic = pickTopic(window.location.search, me.topics);
+      els.pageTitle.textContent = 'จัดการความรู้ · ' + topicName(state.topic);
+      els.hOpen.textContent = 'คำถามรอทีม' + topicTeam(state.topic) + 'ตอบ';
+      try { document.title = 'จัดการความรู้ · ' + topicName(state.topic); } catch (e) { /* ignore */ }
+      buildTopicBar(me.topics);
       els.editorsHelp.textContent = editorsHelpText(me);
       els.editorAddBox.hidden = !canManageEditors(me);
       els.pdfBtn.hidden = !canEditKb(me);
@@ -3139,6 +3166,23 @@
       if (err && err.status === 401) return;
       if (err && err.status === 403) { hideMessage(); showDenied(NO_ACCESS_TEXT); return; }
       showMessage(failText(err), true);
+    });
+  }
+  // Several Topics: one button each, a click opens the page for that Topic (the session is kept in storage).
+  function buildTopicBar(topics) {
+    clear(els.topicBar);
+    var list = Array.isArray(topics) ? topics : [];
+    els.topicBar.hidden = list.length < 2;
+    list.forEach(function (t) {
+      var b = add(els.topicBar, 'button', 'tab', topicName(t));
+      b.type = 'button';
+      b.setAttribute('aria-selected', t === state.topic ? 'true' : 'false');
+      b.addEventListener('click', function () {
+        if (t === state.topic) return;
+        confirmLeave().then(function (ok) {
+          if (ok) window.location.href = window.location.pathname + '?topic=' + t;
+        });
+      });
     });
   }
   function startPage() {

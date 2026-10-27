@@ -706,6 +706,11 @@
     var source = d.topicSource === 'chosen' ? 'chosen' : 'auto';
     var logId = typeof d.logId === 'number' && isFinite(d.logId) ? d.logId : null;
     var hasAnswer = typeof d.answer === 'string' && d.answer.trim() !== '';
+    var cl = d.clarify && typeof d.clarify === 'object' && typeof d.clarify.text === 'string' && d.clarify.text.trim() ? d.clarify : null;
+    if (cl) {
+      var opts = (Array.isArray(cl.options) ? cl.options : []).filter(function (o) { return typeof o === 'string' && o.trim(); }).slice(0, 4);
+      return { kind: 'clarify', topic: topic, source: source, lines: answerLines(cl.text.trim()), options: opts, cards: [], otherCards: [], pics: null, sources: [], logId: null, showFeedback: false, note: '', redacted: d.redacted === true, historyText: cl.text.trim() };
+    }
     if (topic === 'product') {
       var items = Array.isArray(d.items) ? d.items : [];
       if (d.notInCatalog || items.length === 0) {
@@ -1462,6 +1467,16 @@
       rt.dataset.retryBtn = '1';
       rt.addEventListener('click', function () { ask(turn); });
     }
+    if (v.kind === 'clarify' && v.options.length) {
+      var chips = addText(bub, 'div', 'btn-row', '');
+      v.options.forEach(function (o) {
+        var c = addText(chips, 'button', 'btn alt small', o);
+        c.type = 'button';
+        c.disabled = busy;
+        c.dataset.retryBtn = '1';
+        c.addEventListener('click', function () { sendText(o); });
+      });
+    }
     box.appendChild(bub);
     if (v.showFeedback) box.appendChild(renderFeedback(v.logId, v.topic));
     if (v.kind === 'product' && (v.cards.length || v.otherCards.length)) {
@@ -1703,6 +1718,14 @@
       renderThumbs(); updateSend();
     }
     if (failed) setHint('อ่านรูปไม่ได้ ' + failed + ' รูป ลองรูปอื่น', true);
+  }
+
+  // A suggested answer to a question from the system: sent as a new question, no picture.
+  function sendText(text) {
+    if (!current || busy || shrinking > 0) return;
+    var turn = { id: nextTurnId++, q: text, topic: 'auto', images: [], pictureText: '', state: 'wait', view: null, reply: null, error: '' };
+    addTurn(turn);
+    ask(turn);
   }
 
   function submit() {

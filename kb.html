@@ -8,6 +8,11 @@
 <style>
   /* Page layout only. Colours, fonts, radii, spacing and focus come from pqa-theme.css tokens. */
   .top-inner { max-width: var(--max-wide); flex-wrap: wrap; }
+  button.top-link { border: 0; cursor: pointer; }
+  #topicBar { flex: 1 1 100%; display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-2); }
+  #topicBar[hidden] { display: none; }
+  #topicBar .tb-label { font-size: var(--fs-s); opacity: 0.88; }
+  #topicBar .top-link[aria-selected="true"] { background: var(--c-surface); color: var(--c-brand-strong); font-weight: bold; }
   #who { font-size: var(--fs-s); max-width: 40%; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   #who:empty { display: none; }
 
@@ -171,6 +176,7 @@
     </div>
     <div id="who"></div>
     <a id="backLink" class="top-link" href="chat.html">กลับไปหน้าถามคำถาม</a>
+    <div id="topicBar" role="group" aria-label="เลือกแผนก" hidden></div>
   </div>
 </header>
 
@@ -183,7 +189,6 @@
   </div>
 
   <div id="app" hidden>
-    <div id="topicBar" class="tabs" role="group" aria-label="เลือกแผนก" hidden></div>
     <div id="tabs" class="tabs" role="tablist" aria-label="หมวดจัดการความรู้"></div>
 
     <!-- Tab 1: Open Questions -->
@@ -3178,9 +3183,9 @@
     clear(els.topicBar);
     var list = Array.isArray(topics) ? topics : [];
     els.topicBar.hidden = list.length < 2;
-    if (list.length > 1) add(els.topicBar, 'span', 'note', 'แผนก');
+    if (list.length > 1) add(els.topicBar, 'span', 'tb-label', 'แผนก');
     list.forEach(function (t) {
-      var b = add(els.topicBar, 'button', 'tab', topicName(t));
+      var b = add(els.topicBar, 'button', 'top-link', topicName(t));
       b.type = 'button';
       b.setAttribute('aria-selected', t === state.topic ? 'true' : 'false');
       b.addEventListener('click', function () {

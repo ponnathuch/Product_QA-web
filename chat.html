@@ -162,6 +162,19 @@
     display: flex; align-items: center; justify-content: center;
   }
   .thumb-x svg { width: var(--size-icon-s); height: var(--size-icon-s); }
+  .thumb-e {
+    position: absolute; bottom: calc(var(--space-2) * -1); right: calc(var(--space-2) * -1); width: var(--size-target); height: var(--size-target);
+    border-radius: 50%; border: 1px solid var(--c-line-strong); background: var(--c-surface); color: var(--c-ink); cursor: pointer; padding: 0;
+    display: flex; align-items: center; justify-content: center;
+  }
+  .thumb-e svg { width: var(--size-icon-s); height: var(--size-icon-s); }
+  #redactView {
+    padding: 0; width: min(96vw, var(--max-wide)); max-width: 96vw; max-height: 96vh; overflow: auto;
+    border: 1px solid var(--c-line-strong); border-radius: var(--radius-l); background: var(--c-surface); color: var(--c-ink);
+  }
+  #redactView::backdrop { background: var(--c-scrim); }
+  .rd-stage { display: flex; justify-content: center; background: var(--c-surface-2); border-radius: var(--radius-m); }
+  #rdCanvas { max-width: 100%; max-height: 62vh; touch-action: none; cursor: crosshair; }
   .thumb-busy { width: var(--size-strip-h); height: var(--size-strip-h); border-radius: var(--radius-s); border: 1px dashed var(--c-line-strong); display: flex; align-items: center; justify-content: center; font-size: var(--fs-xs); color: var(--c-ink-3); }
   .comp-row { display: flex; gap: var(--space-2); align-items: flex-end; }
   .icon-btn {
@@ -309,6 +322,19 @@
   <div id="panelBody"><div id="panelStatus" role="status"></div><div id="panelList"></div></div>
 </aside>
 </div>
+
+<dialog id="redactView" aria-labelledby="rdTitle">
+  <div class="pv-in">
+    <div class="pv-count" id="rdTitle">ปิดข้อมูลลับบนรูป</div>
+    <p class="pv-cap">ลากนิ้วหรือเมาส์คลุมส่วนที่ไม่อยากให้เห็น เช่น รหัสผ่าน ชื่อหรือเบอร์โทรลูกค้า จะถูกปิดทับเป็นสีดำ</p>
+    <div class="rd-stage"><canvas id="rdCanvas" aria-label="รูปที่กำลังปิดข้อมูล"></canvas></div>
+    <div class="pv-nav">
+      <button type="button" id="rdUndo" class="btn alt pv-btn"><span>ย้อนล่าสุด</span></button>
+      <button type="button" id="rdCancel" class="btn alt pv-btn"><span>ยกเลิก</span></button>
+      <button type="button" id="rdDone" class="btn pv-btn"><span>ใช้รูปนี้</span></button>
+    </div>
+  </div>
+</dialog>
 
 <dialog id="picView" aria-labelledby="pvCount">
   <div class="pv-in">
@@ -882,6 +908,15 @@
       articleGone: !art && r.status === 'answered' && r.articleDeleted === true ? ARTICLE_GONE_TEXT : ''
     };
   }
+    // Rectangle dragged on the picture editor, in 0..1 picture coordinates. null when it is only a tap or a speck.
+  function redactRect(x0, y0, x1, y1, w, h) {
+    if (!(w > 0) || !(h > 0)) return null;
+    var cl = function (v, max) { return Math.min(Math.max(v, 0), max); };
+    var ax = cl(Math.min(x0, x1), w), bx = cl(Math.max(x0, x1), w);
+    var ay = cl(Math.min(y0, y1), h), by = cl(Math.max(y0, y1), h);
+    if (bx - ax < 6 || by - ay < 6) return null;
+    return { x: ax / w, y: ay / h, w: (bx - ax) / w, h: (by - ay) / h };
+  }
   // END PURE
 
   var ICONS = {
@@ -891,6 +926,7 @@
     camera: [['path', 'M14.5 4h-5L7 7H4a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2h-3z'], ['circle', '12,13,3']],
     image: [['rect', '3,3,18,18,2'], ['circle', '9,9,2'], ['path', 'M21 15l-5-5L5 21']],
     send: [['path', 'M22 2L11 13'], ['path', 'M22 2l-7 20-4-9-9-4z']],
+    shield: [['path', 'M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z']],
     close: [['path', 'M18 6L6 18'], ['path', 'M6 6l12 12']],
     chevronD: [['path', 'M6 9l6 6 6-6']],
     chevronL: [['path', 'M15 18l-6-6 6-6']],
@@ -929,7 +965,8 @@
     send: $('sendBtn'), hint: $('hint'), cam: $('camBtn'), gal: $('galBtn'), camInput: $('camInput'), galInput: $('galInput'),
     panel: $('panel'), panelClose: $('panelClose'), panelRefresh: $('panelRefresh'), panelStatus: $('panelStatus'), panelList: $('panelList'),
     pv: $('picView'), pvCount: $('pvCount'), pvStage: $('pvStage'), pvImg: $('pvImg'), pvFail: $('pvFail'), pvCap: $('pvCap'),
-    pvPrev: $('pvPrev'), pvNext: $('pvNext'), pvClose: $('pvClose')
+    pvPrev: $('pvPrev'), pvNext: $('pvNext'), pvClose: $('pvClose'),
+    rd: $('redactView'), rdCanvas: $('rdCanvas'), rdUndo: $('rdUndo'), rdCancel: $('rdCancel'), rdDone: $('rdDone')
   };
   var HINT_DEFAULT = els.hint.innerHTML;
 
@@ -1651,6 +1688,12 @@
       x.setAttribute('aria-label', 'เอารูปที่ ' + (i + 1) + ' ออก');
       x.appendChild(icon('close'));
       x.addEventListener('click', function () { attached.splice(i, 1); renderThumbs(); updateSend(); els.q.focus(); });
+      var ed = addText(box, 'button', 'thumb-e', '');
+      ed.type = 'button';
+      ed.setAttribute('aria-label', 'ปิดข้อมูลลับบนรูปที่ ' + (i + 1));
+      ed.title = 'ปิดข้อมูลลับ';
+      ed.appendChild(icon('shield'));
+      ed.addEventListener('click', function () { openRedact(im); });
     });
     for (var k = 0; k < shrinking; k++) addText(els.thumbs, 'div', 'thumb-busy', 'กำลังย่อ...');
     var full = attached.length + shrinking >= MAX_IMAGES;
@@ -1702,6 +1745,78 @@
     }
     throw new Error('too_big');
   }
+  // ---------- cover secrets on a picture before it is sent ----------
+  var redact = null; // { im, img, rects, drag, start }
+  function redactPaint() {
+    var st = redact, cv = els.rdCanvas, ctx = cv.getContext('2d');
+    ctx.drawImage(st.img, 0, 0, cv.width, cv.height);
+    ctx.fillStyle = 'black'; // ds-allow-hardcode: the cover must be opaque black, never a theme colour
+    st.rects.concat(st.drag ? [st.drag] : []).forEach(function (r) {
+      ctx.fillRect(r.x * cv.width, r.y * cv.height, r.w * cv.width, r.h * cv.height);
+    });
+  }
+  function redactPoint(ev) {
+    var b = els.rdCanvas.getBoundingClientRect();
+    return { x: (ev.clientX - b.left) * els.rdCanvas.width / b.width, y: (ev.clientY - b.top) * els.rdCanvas.height / b.height };
+  }
+  function openRedact(im) {
+    var img = new Image();
+    img.onload = function () {
+      els.rdCanvas.width = img.naturalWidth;
+      els.rdCanvas.height = img.naturalHeight;
+      redact = { im: im, img: img, rects: [], drag: null, start: null };
+      redactPaint();
+      if (!els.rd.open) els.rd.showModal();
+    };
+    img.src = im.preview;
+  }
+  function closeRedact() { redact = null; if (els.rd.open) els.rd.close(); }
+  els.rdCanvas.addEventListener('pointerdown', function (ev) {
+    if (!redact) return;
+    ev.preventDefault();
+    try { els.rdCanvas.setPointerCapture(ev.pointerId); } catch (e) { /* ignore */ }
+    redact.start = redactPoint(ev);
+  });
+  els.rdCanvas.addEventListener('pointermove', function (ev) {
+    if (!redact || !redact.start) return;
+    var p = redactPoint(ev), cv = els.rdCanvas;
+    redact.drag = redactRect(redact.start.x, redact.start.y, p.x, p.y, cv.width, cv.height);
+    redactPaint();
+  });
+  function redactEnd() {
+    if (!redact || !redact.start) return;
+    if (redact.drag) redact.rects.push(redact.drag);
+    redact.drag = null; redact.start = null;
+    redactPaint();
+  }
+  els.rdCanvas.addEventListener('pointerup', redactEnd);
+  els.rdCanvas.addEventListener('pointercancel', redactEnd);
+  els.rdUndo.addEventListener('click', function () { if (redact) { redact.rects.pop(); redactPaint(); } });
+  els.rdCancel.addEventListener('click', closeRedact);
+  els.rd.addEventListener('cancel', function () { redact = null; });
+  els.rdDone.addEventListener('click', function () {
+    if (!redact) return;
+    var st = redact, cv = els.rdCanvas;
+    redactPaint();
+    var qs = [JPEG_QUALITY, 0.65, 0.5];
+    for (var k = 0; k < qs.length; k++) {
+      var url = cv.toDataURL('image/jpeg', qs[k]);
+      var b64 = dataUrlToBase64(url);
+      if (b64 && decodedBytes(b64) <= MAX_IMAGE_BYTES) {
+        var tw = shrinkSize(cv.width, cv.height, 96);
+        var tc = document.createElement('canvas');
+        tc.width = tw.w; tc.height = tw.h;
+        tc.getContext('2d').drawImage(cv, 0, 0, tw.w, tw.h);
+        st.im.data = b64; st.im.preview = url; st.im.thumb = tc.toDataURL('image/jpeg', 0.6);
+        closeRedact();
+        renderThumbs();
+        return;
+      }
+    }
+    closeRedact();
+    setHint('ปิดข้อมูลแล้วไฟล์ใหญ่เกินไป ลองรูปที่เล็กลง', true);
+  });
+
   async function addFiles(files) {
     var list = Array.prototype.slice.call(files || []).filter(function (f) { return f && /^image[/]/.test(f.type); });
     if (!list.length) return;

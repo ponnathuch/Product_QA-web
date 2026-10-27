@@ -579,6 +579,13 @@
     return String(text || '').trim().length > 0 && imageCount >= 0;
   }
 
+  var PRODUCT_NOTE_TEXT = 'ข้อมูลจากเอกสารสินค้าของบริษัทเท่านั้น ถ้าไม่พบ หมายถึงยังไม่มีในเอกสาร ไม่ได้แปลว่าบริษัทไม่มีขาย';
+  // The old search page, with this question already typed in.
+  function searchPageUrl(q) {
+    var t = String(q === undefined || q === null ? '' : q).trim().slice(0, 200);
+    return t ? 'app.html?q=' + encodeURIComponent(t) : 'app.html';
+  }
+
   // ---- topic label ----
   function topicLabel(topic) {
     if (topic === 'product') return 'สินค้า';
@@ -1578,9 +1585,18 @@
         cards.appendChild(more);
       }
       box.appendChild(cards);
+    }
+    if (v.kind === 'product') {
+      addText(box, 'div', 'foot-link', PRODUCT_NOTE_TEXT);
       var fl = addText(box, 'div', 'foot-link', 'ดูหน้าเอกสารและไฟล์ทั้งหมดได้ที่ ');
       var a = addText(fl, 'a', '', 'หน้าค้นหาสินค้า');
-      a.href = 'app.html';
+      a.href = searchPageUrl(turn.q);
+      a.target = '_blank';
+      // window.open (not a plain _blank link) so the new tab keeps this tab's session, which lives in sessionStorage.
+      a.addEventListener('click', function (ev) {
+        ev.preventDefault();
+        if (!window.open(a.href, '_blank')) window.location.href = a.href;
+      });
     }
   }
 

@@ -279,6 +279,7 @@
     .top-inner { flex-wrap: wrap; }
     .title p { display: none; }
     #who { order: 3; flex: 1 1 100%; max-width: 100%; }
+    #chatLink { order: 3; }
     #manageLink { order: 4; }
     #adminLink { order: 5; }
     main { padding: 0 var(--space-3) var(--space-6); }
@@ -301,6 +302,7 @@
       <p>ค้นจากเอกสารสินค้าของบริษัท พร้อมหน้าเอกสารอ้างอิง</p>
     </div>
     <div id="who"></div>
+    <a id="chatLink" class="top-link" href="chat.html">กลับหน้าผู้ช่วยสาขา</a>
     <a id="manageLink" class="top-link" href="manage.html" hidden>จัดการเอกสารสินค้า</a>
     <a id="adminLink" class="top-link" href="admin.html" hidden>หน้าผู้ดูแล</a>
   </div>
@@ -388,6 +390,11 @@
     if (typeof stored.session !== 'string' || !stored.session) return false;
     if (typeof stored.expiresAt !== 'number') return false;
     return stored.expiresAt > now;
+  }
+  // ?q= from the chat page: the question to search at once (cut to the search limit). '' when absent.
+  function startQuery(search) {
+    var v = new URLSearchParams(search).get('q');
+    return v ? v.trim().slice(0, 200) : '';
   }
   function getSsoParam(search) {
     var v = new URLSearchParams(search).get('sso');
@@ -829,6 +836,8 @@
     renderWho(sess);
     els.box.hidden = false;
     els.q.focus();
+    var pre = startQuery(window.location.search);
+    if (pre) { els.q.value = pre; syncClear(); doSearch(); }
   }
   function showNoSearch(text) {
     current = null;

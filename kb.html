@@ -344,13 +344,13 @@
   var LIST_PAGE = 20;
   var LOG_PAGE = 20;
   var TAB_DEFS = [
-    { id: 'open', label: 'คำถามรอ IT ตอบ' },
+    { id: 'open', label: 'คำถามรอทีมตอบ' },
     { id: 'articles', label: 'บทความ' },
     { id: 'editors', label: 'ผู้ดูแล' }
   ];
   var STATUS_ORDER = ['waiting', 'answered', 'dismissed'];
-  var STATUS_LABEL = { waiting: 'รอ IT ตอบ', answered: 'ตอบแล้ว', dismissed: 'ปิดเรื่อง' };
-  var FILTER_LABEL = { waiting: 'รอ IT ตอบ', answered: 'ตอบแล้ว', dismissed: 'ปิดเรื่องแล้ว' };
+  var STATUS_LABEL = { waiting: 'รอทีมตอบ', answered: 'ตอบแล้ว', dismissed: 'ปิดเรื่อง' };
+  var FILTER_LABEL = { waiting: 'รอทีมตอบ', answered: 'ตอบแล้ว', dismissed: 'ปิดเรื่องแล้ว' };
   var SECRET_TEXT = 'ห้ามใส่รหัสผ่านหรือคีย์ในบทความ';
   var LEAVE_TEXT = 'ยังมีข้อมูลที่ยังไม่ได้บันทึก ถ้าออกจากหน้านี้ข้อมูลจะหายไป';
   var NO_SESSION_TEXT = 'กรุณาเปิดจากเมนู ถามคำถาม ใน Job Tracker';
@@ -1498,7 +1498,12 @@
     state.loaded[id] = true;
     if (id === 'open') loadOpen();
     else if (id === 'articles') { loadArticles(); loadLog(true); }
-    else loadEditors();
+    else if (state.topic !== 'it') {
+      // The it_editors list is IT's; every other Topic's editors are set in Job Tracker (PQA_TOPIC_EDITORS).
+      els.editorsHelp.textContent = 'ผู้ดูแลความรู้ของแผนกนี้กำหนดในหน้าตั้งค่าของ Job Tracker ช่อง ผู้ดูแลความรู้รายแผนก';
+      els.editorAddBox.hidden = true;
+      setNote(els.editorListNote, '', '');
+    } else loadEditors();
   }
 
   // ---------- Open Questions ----------
@@ -1552,7 +1557,7 @@
     });
     var fl = takeFlash('open');
     if (fl) setNote(els.openNote, fl.text, fl.tone);
-    else if (!state.openRows.length) setNote(els.openNote, state.openFilter === 'waiting' ? 'ไม่มีคำถามที่รอ IT ตอบ' : 'ไม่มีคำถามในสถานะนี้', '');
+    else if (!state.openRows.length) setNote(els.openNote, state.openFilter === 'waiting' ? 'ไม่มีคำถามที่รอทีมตอบ' : 'ไม่มีคำถามในสถานะนี้', '');
     else setNote(els.openNote, '', '');
     els.openPage.textContent = pageText(state.openOffset, state.openRows.length, state.openTotal);
     els.openPrev.disabled = state.openOffset <= 0;
@@ -3173,6 +3178,7 @@
     clear(els.topicBar);
     var list = Array.isArray(topics) ? topics : [];
     els.topicBar.hidden = list.length < 2;
+    if (list.length > 1) add(els.topicBar, 'span', 'note', 'แผนก');
     list.forEach(function (t) {
       var b = add(els.topicBar, 'button', 'tab', topicName(t));
       b.type = 'button';

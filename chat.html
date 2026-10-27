@@ -289,6 +289,8 @@
     <div id="who"></div>
     <button type="button" id="mineBtn" class="top-link" aria-haspopup="dialog" hidden>คำถามของฉัน</button>
     <a id="kbLink" class="top-link" href="kb.html" hidden>จัดการความรู้ IT</a>
+    <a id="manageLink" class="top-link" href="manage.html" hidden>จัดการเอกสารสินค้า</a>
+    <a id="adminLink" class="top-link" href="admin.html" hidden>หน้าผู้ดูแล</a>
   </div>
 </header>
 
@@ -960,7 +962,7 @@
 
   var $ = function (id) { return document.getElementById(id); };
   var els = {
-    app: $('app'), notice: $('notice'), msg: $('msg'), who: $('who'), mineBtn: $('mineBtn'), kbLink: $('kbLink'),
+    app: $('app'), notice: $('notice'), msg: $('msg'), who: $('who'), mineBtn: $('mineBtn'), kbLink: $('kbLink'), manageLink: $('manageLink'), adminLink: $('adminLink'),
     thread: $('thread'), threadIn: $('threadIn'), composer: $('composer'), thumbs: $('thumbs'), q: $('q'),
     send: $('sendBtn'), hint: $('hint'), cam: $('camBtn'), gal: $('galBtn'), camInput: $('camInput'), galInput: $('galInput'),
     panel: $('panel'), panelClose: $('panelClose'), panelRefresh: $('panelRefresh'), panelStatus: $('panelStatus'), panelList: $('panelList'),
@@ -1047,6 +1049,8 @@
     hideMessage();
     renderWho(sess);
     els.mineBtn.hidden = false;
+    els.manageLink.hidden = !sess.canManage;
+    els.adminLink.hidden = !sess.isAdmin;
     els.composer.hidden = false;
     if (!turns.length) renderIntro();
     els.q.focus();
@@ -1057,6 +1061,8 @@
     els.composer.hidden = true;
     els.mineBtn.hidden = true;
     els.kbLink.hidden = true;
+    els.manageLink.hidden = true;
+    els.adminLink.hidden = true;
     closePanel();
     showMessage(text, true);
   }

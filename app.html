@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>ถามข้อมูลสินค้า</title>
+<title>รายละเอียดสินค้าในระบบ</title>
 <link rel="stylesheet" href="pqa-theme.css?v=1">
 <style>
   /* Page layout only. Colours, fonts, radii, spacing and focus come from pqa-theme.css tokens. */
@@ -299,7 +299,7 @@
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/><path d="M9.5 9a2.5 2.5 0 0 1 5 0c0 1.5-2.5 2-2.5 3.5"/><path d="M12 15h.01"/></svg>
     </div>
     <div class="title">
-      <h1>ถามข้อมูลสินค้า</h1>
+      <h1>รายละเอียดสินค้าในระบบ</h1>
       <p>ค้นจากเอกสารสินค้าของบริษัท พร้อมหน้าเอกสารอ้างอิง</p>
     </div>
     <div id="who"></div>
@@ -370,7 +370,7 @@
 
   // BEGIN PURE
   function reasonMessage(reason) {
-    if (reason === 'expired') return 'ลิงก์หมดอายุ กรุณากดเมนู ถามข้อมูลสินค้า ใน Job Tracker อีกครั้ง';
+    if (reason === 'expired') return 'ลิงก์หมดอายุ กรุณากดเมนู รายละเอียดสินค้าในระบบ ใน Job Tracker อีกครั้ง';
     if (reason === 'reused') return 'ลิงก์นี้ถูกใช้ไปแล้ว กรุณากดเมนูใน Job Tracker อีกครั้ง';
     if (reason === 'malformed' || reason === 'bad_signature') return 'ลิงก์ไม่ถูกต้อง กรุณากดเมนูใน Job Tracker อีกครั้ง';
     return 'ติดต่อเซิร์ฟเวอร์ไม่ได้ ลองใหม่อีกครั้ง';
@@ -882,7 +882,7 @@
       showSearch(stored);
     } else {
       clearStored();
-      showNoSearch('กรุณาเปิดจากเมนู ถามข้อมูลสินค้า ใน Job Tracker');
+      showNoSearch('กรุณาเปิดจากเมนู รายละเอียดสินค้าในระบบ ใน Job Tracker');
     }
   }
 

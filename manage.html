@@ -393,7 +393,7 @@
   ];
   var CAPPED_TEXT = 'AI อ่านครบโควตาวันนี้แล้ว บันทึกได้แต่ไม่มีข้อความอัตโนมัติ';
   var DENIED_TEXT = 'หน้านี้สำหรับผู้เพิ่มเอกสารสินค้า';
-  var NO_SESSION_TEXT = 'กรุณาเปิดจากเมนู ถามข้อมูลสินค้า ใน Job Tracker';
+  var NO_SESSION_TEXT = 'กรุณาเปิดจากเมนู รายละเอียดสินค้าในระบบ ใน Job Tracker';
   var KIND_ORDER = ['photo', 'spec', 'shipping', 'promo', 'payment', 'cert', 'warranty', 'manual', 'letter', 'other'];
   var KIND_LABEL = {
     photo: 'รูปสินค้า', spec: 'รายละเอียด', shipping: 'ค่าขนส่ง', promo: 'โปรโมชัน',
@@ -541,7 +541,7 @@
   // Thai message for an Edge Function error status.
   function errorText(status) {
     if (status === 400) return 'ข้อมูลไม่ถูกต้อง ตรวจสอบแล้วลองใหม่';
-    if (status === 401) return 'เซสชันหมดอายุ กรุณากดเมนู ถามข้อมูลสินค้า ใน Job Tracker อีกครั้ง';
+    if (status === 401) return 'เซสชันหมดอายุ กรุณากดเมนู รายละเอียดสินค้าในระบบ ใน Job Tracker อีกครั้ง';
     if (status === 403) return 'คุณไม่มีสิทธิ์ทำรายการนี้';
     if (status === 404) return 'ไม่พบข้อมูลนี้ (อาจถูกลบไปแล้ว)';
     if (status === 409) return 'ข้อมูลเปลี่ยนไปแล้ว กรุณาเปิดรหัสนี้ใหม่แล้วลองอีกครั้ง';

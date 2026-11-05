@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>หน้าผู้ดูแล - ถามข้อมูลสินค้า</title>
+<title>หน้าผู้ดูแล - ผู้ช่วยสาขา</title>
 <link rel="stylesheet" href="pqa-theme.css?v=1">
 <style>
   /* Page layout only. Colours, fonts, radii, spacing and focus come from pqa-theme.css tokens. */
@@ -358,7 +358,7 @@
     });
   }
   function failText(r) {
-    if (r.status === 401) return 'เซสชันหมดอายุ กรุณาเปิดจากเมนู ถามข้อมูลสินค้า ใน Job Tracker อีกครั้ง';
+    if (r.status === 401) return 'เซสชันหมดอายุ กรุณาเปิดจากเมนู ผู้ช่วยสาขา ใน Job Tracker อีกครั้ง';
     if (r.status === 403) return 'ไม่มีสิทธิ์ผู้ดูแล';
     if (r.status === 400 && r.data && typeof r.data.message === 'string') return r.data.message;
     return 'ติดต่อเซิร์ฟเวอร์ไม่ได้ ลองใหม่อีกครั้ง';
@@ -612,7 +612,7 @@
     var stored = loadStored();
     if (!stored || !isAdminSession(stored, Date.now())) {
       var hasSession = stored && typeof stored.session === 'string' && stored.expiresAt > Date.now();
-      showMessage(hasSession ? 'หน้านี้สำหรับผู้ดูแลเท่านั้น' : 'กรุณาเปิดจากเมนู ถามข้อมูลสินค้า ใน Job Tracker', true);
+      showMessage(hasSession ? 'หน้านี้สำหรับผู้ดูแลเท่านั้น' : 'กรุณาเปิดจากเมนู ผู้ช่วยสาขา ใน Job Tracker', true);
       return;
     }
     session = stored;
